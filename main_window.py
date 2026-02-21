@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
         self.lbl_save_status.setStyleSheet("color: #00ff00; font-weight: bold;")
         layout.addRow("", self.lbl_save_status)
         
-        self.btn_refresh_models = QPushButton("Atualizar Modelos")
+        self.btn_refresh_models = QPushButton("Buscar modelos")
         self.btn_refresh_models.clicked.connect(self.refresh_models)
         layout.addRow(self.btn_refresh_models)
         
@@ -393,57 +393,62 @@ class MainWindow(QMainWindow):
              # ... unblock others ...
 
     def refresh_models(self):
-        """Fetch models."""
-        provider = self.input_provider.currentText()
+        """Fetch models for both AI and Embedding providers."""
+        ai_provider = self.input_provider.currentText()
+        emb_provider = self.input_embed_provider.currentText()
         
         self.input_model_name.blockSignals(True)
-        current = self.input_model_name.currentText()
-        self.input_model_name.clear()
+        self.input_embed_model.blockSignals(True)
         
-        self.text_logs.append(f">> Atualizando lista de modelos ({provider})...")
+        curr_ai = self.input_model_name.currentText()
+        curr_emb = self.input_embed_model.currentText()
+        
+        self.text_logs.append(f">> Buscando modelos (IA: {ai_provider}, Embeddings: {emb_provider})...")
+        
         try:
-            if provider == "Ollama":
-                url = self.input_ollama_url.text()
-                adapter = OllamaAdapter(base_url=url)
-                models = adapter.list_models()
-                self.input_model_name.addItems(models)
+            # Function to fetch models for a specific provider
+            def fetch_for_provider(provider_name):
+                if provider_name == "Ollama":
+                    url = self.input_ollama_url.text()
+                    adapter = OllamaAdapter(base_url=url)
+                    return adapter.list_models()
+                else: # OpenRouter
+                    from openrouter_client import OpenRouterAdapter
+                    key = self.input_openrouter_key.text()
+                    if not key:
+                        raise ValueError("API Key do OpenRouter ausente.")
+                    adapter = OpenRouterAdapter(api_key=key)
+                    return adapter.list_models()
+
+            # Cache results to avoid double fetching if providers are the same
+            cache = {}
+            
+            # 1. Fetch for AI
+            if ai_provider not in cache:
+                cache[ai_provider] = fetch_for_provider(ai_provider)
+            
+            self.input_model_name.clear()
+            self.input_model_name.addItems(cache[ai_provider])
+            self.input_model_name.setCurrentText(curr_ai)
+            
+            # 2. Fetch for Embedding
+            if emb_provider not in cache:
+                cache[emb_provider] = fetch_for_provider(emb_provider)
                 
-                # Also update Embedding Model list
-                self.input_embed_model.blockSignals(True)
-                curr_embed = self.input_embed_model.currentText()
-                self.input_embed_model.clear()
-                self.input_embed_model.addItems(models)
-                self.input_embed_model.setCurrentText(curr_embed)
-                self.input_embed_model.blockSignals(False)
-                
-                QMessageBox.information(self, "Ollama", f"Modelos encontrados: {len(models)} (IA e Embedding)")
-            else:
-                # OpenRouter List
-                from openrouter_client import OpenRouterAdapter
-                # We assume key is present
-                key = self.input_openrouter_key.text()
-                if not key:
-                    QMessageBox.warning(self, "Aviso", "Insira a API Key do OpenRouter.")
-                    return
-                adapter = OpenRouterAdapter(api_key=key)
-                models = adapter.list_models()
-                self.input_model_name.addItems(models)
-                
-                # Also update Embedding Model list
-                self.input_embed_model.blockSignals(True)
-                curr_embed = self.input_embed_model.currentText()
-                self.input_embed_model.clear()
-                self.input_embed_model.addItems(models)
-                self.input_embed_model.setCurrentText(curr_embed)
-                self.input_embed_model.blockSignals(False)
-                
-                QMessageBox.information(self, "OpenRouter", f"Sucesso! {len(models)} modelos carregados (IA e Embedding).")
-                
-            self.input_model_name.setCurrentText(current)
+            self.input_embed_model.clear()
+            self.input_embed_model.addItems(cache[emb_provider])
+            self.input_embed_model.setCurrentText(curr_emb)
+            
+            msg = f"Modelos atualizados!\nIA ({ai_provider}): {len(cache[ai_provider])} modelos\nEmbedding ({emb_provider}): {len(cache[emb_provider])} modelos"
+            QMessageBox.information(self, "Sucesso", msg)
+            self.text_logs.append(">> Lista de modelos atualizada com sucesso.")
+            
         except Exception as e:
-             QMessageBox.critical(self, "Erro", f"Erro: {e}")
+             QMessageBox.critical(self, "Erro ao buscar modelos", f"Erro: {e}")
+             self.text_logs.append(f">> Falha ao buscar modelos: {e}")
         finally:
             self.input_model_name.blockSignals(False)
+            self.input_embed_model.blockSignals(False)
 
     # --- Bot Logic ---
     
