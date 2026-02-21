@@ -494,8 +494,8 @@ class TelegramBotController:
             return
         await update.message.reply_text(f"Seu ID do Telegram é: <code>{update.effective_user.id}</code>", parse_mode="HTML")
 
-    async def _send_start_menu(self, update: Update) -> None:
-        """Send the start menu with interactive buttons."""
+    def _get_menu_keyboard(self) -> InlineKeyboardMarkup:
+        """Return the standard menu keyboard."""
         keyboard = [
             [
                 InlineKeyboardButton("Horário", callback_data="btn_horarios"),
@@ -506,12 +506,14 @@ class TelegramBotController:
                 InlineKeyboardButton("Falar com o Professor", callback_data="btn_professor"),
             ]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
+        return InlineKeyboardMarkup(keyboard)
+
+    async def _send_start_menu(self, update: Update) -> None:
+        """Send the start menu with interactive buttons."""
         await update.message.reply_text(
             f"Olá, {update.effective_user.first_name}. Sou o assistente acadêmico.\n"
             "Selecione uma opção ou digite sua dúvida:",
-            reply_markup=reply_markup
+            reply_markup=self._get_menu_keyboard()
         )
 
     async def _show_horarios(self, query) -> None:
@@ -541,6 +543,8 @@ class TelegramBotController:
                         filename=filename,
                         caption=f"📅 {filename}"
                     )
+            # Re-send menu buttons
+            await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
         except Exception as e:
             logger.error(f"Erro ao buscar horários: {e}")
             await query.edit_message_text(text=f"Erro ao processar horários: {e}")
@@ -572,6 +576,8 @@ class TelegramBotController:
                         filename=filename,
                         caption=f"📄 {filename}"
                     )
+            # Re-send menu buttons
+            await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
         except Exception as e:
             logger.error(f"Erro ao buscar cronogramas: {e}")
             await query.edit_message_text(text=f"Erro ao processar cronogramas: {e}")
@@ -602,6 +608,7 @@ class TelegramBotController:
                 text=f"<b>📚 Materiais das Disciplinas</b>\n\n{content}",
                 parse_mode="HTML"
             )
+            await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
         except Exception as e:
             logger.error(f"Erro ao ler arquivo de materiais: {e}")
             await query.edit_message_text(text=f"Erro ao processar materiais: {e}")
@@ -628,6 +635,7 @@ class TelegramBotController:
                       "E-mail: carlo.demusis@gmail.com",
                  parse_mode="HTML"
              ) # type: ignore
+              await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
         
         # --- Admin Buttons (Summary) ---
         elif data.startswith("btn_summary_"):
@@ -985,6 +993,7 @@ class TelegramBotController:
                 # Clean markdown since we are sending as plain text
                 response_text = self._clean_markdown(response_text)
                 await update.message.reply_text(response_text) # type: ignore
+                await update.message.reply_text("Selecione uma opção ou digite outra dúvida:", reply_markup=self._get_menu_keyboard()) # type: ignore
             else:
                  await update.message.reply_text("Desculpe, não consegui gerar uma resposta.") # type: ignore
             
