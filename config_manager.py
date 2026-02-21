@@ -60,7 +60,8 @@ class ConfigurationManager:
             "temperature": 0.7,
             "max_tokens": 2048,
             "ollama_url": "http://127.0.0.1:11434",
-            "rag_k": 8
+            "rag_k": 8,
+            "chroma_dir": "db_atendimento"
         }
         self._config_data = default_config
         self._save_config()

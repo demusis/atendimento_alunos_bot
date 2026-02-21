@@ -34,8 +34,22 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 4. Ajustar permissões e preparativos finais
-echo -e "⚙️ 4. Ajustando permissões..."
+# 4. Criar diretório do Banco de Dados e ajustar permissões
+echo -e "⚙️ 4. Configurando diretório do Banco de Dados..."
+mkdir -p db_atendimento
+chmod 777 db_atendimento
+
+# 5. Inicializar config.json se não existir
+if [ ! -f "config.json" ]; then
+    echo -e "📝 5. Criando config.json inicial..."
+    cp config_example.json config.json
+    # Ajusta o caminho do chroma_dir no config.json para o caminho absoluto atual
+    FULL_PATH=$(pwd)/db_atendimento
+    sed -i "s|\"chroma_dir\": .*|\"chroma_dir\": \"$FULL_PATH\"|g" config.json
+fi
+
+# 6. Ajustar permissões e preparativos finais
+echo -e "⚙️ 6. Ajustando permissões dos scripts..."
 chmod +x start_rp4.sh
 
 # 5. Resumo e Instruções
