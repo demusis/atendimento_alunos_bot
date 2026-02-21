@@ -126,8 +126,12 @@ class OpenRouterAdapter:
             Sorted list of model IDs (e.g., "openai/gpt-4o").
         """
         url = f"{self.base_url}/models"
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            
         try:
-            response = requests.get(url, timeout=15)
+            response = requests.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             data = response.json()
             

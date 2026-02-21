@@ -400,13 +400,23 @@ class MainWindow(QMainWindow):
         current = self.input_model_name.currentText()
         self.input_model_name.clear()
         
+        self.text_logs.append(f">> Atualizando lista de modelos ({provider})...")
         try:
             if provider == "Ollama":
                 url = self.input_ollama_url.text()
                 adapter = OllamaAdapter(base_url=url)
                 models = adapter.list_models()
                 self.input_model_name.addItems(models)
-                QMessageBox.information(self, "Ollama", f"Modelos encontrados: {len(models)}")
+                
+                # Also update Embedding Model list
+                self.input_embed_model.blockSignals(True)
+                curr_embed = self.input_embed_model.currentText()
+                self.input_embed_model.clear()
+                self.input_embed_model.addItems(models)
+                self.input_embed_model.setCurrentText(curr_embed)
+                self.input_embed_model.blockSignals(False)
+                
+                QMessageBox.information(self, "Ollama", f"Modelos encontrados: {len(models)} (IA e Embedding)")
             else:
                 # OpenRouter List
                 from openrouter_client import OpenRouterAdapter
@@ -418,7 +428,16 @@ class MainWindow(QMainWindow):
                 adapter = OpenRouterAdapter(api_key=key)
                 models = adapter.list_models()
                 self.input_model_name.addItems(models)
-                QMessageBox.information(self, "OpenRouter", f"Modelos comuns listados.")
+                
+                # Also update Embedding Model list
+                self.input_embed_model.blockSignals(True)
+                curr_embed = self.input_embed_model.currentText()
+                self.input_embed_model.clear()
+                self.input_embed_model.addItems(models)
+                self.input_embed_model.setCurrentText(curr_embed)
+                self.input_embed_model.blockSignals(False)
+                
+                QMessageBox.information(self, "OpenRouter", f"Sucesso! {len(models)} modelos carregados (IA e Embedding).")
                 
             self.input_model_name.setCurrentText(current)
         except Exception as e:
