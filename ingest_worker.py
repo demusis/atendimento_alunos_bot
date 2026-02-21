@@ -15,11 +15,18 @@ def main():
         action = data["action"]
         chroma_dir = data.get("chroma_dir") or None
         model_name = data.get("model_name", "nomic-embed-text")
+        provider = data.get("embedding_provider", "ollama")
+        api_key = data.get("api_key", "")
 
         # Import here, inside the clean subprocess
         from rag_repository import VectorStoreRepository
 
-        repo = VectorStoreRepository(persist_directory=chroma_dir, model_name=model_name)
+        repo = VectorStoreRepository(
+            persist_directory=chroma_dir, 
+            model_name=model_name,
+            provider=provider,
+            api_key=api_key
+        )
 
         if action == "ingest":
             file_path = data["file_path"]

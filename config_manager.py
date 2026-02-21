@@ -61,7 +61,10 @@ class ConfigurationManager:
             "temperature": 0.7,
             "max_tokens": 2048,
             "ollama_url": "http://127.0.0.1:11434",
+            "ollama_embedding_model": "nomic-embed-text",
             "rag_k": 8,
+            "embedding_provider": "ollama", # ollama or openrouter
+            "openrouter_embedding_model": "qwen/qwen3-embedding-8b",
             "chat_history_size": 5,
             "rate_limit_per_minute": 10,
             "chroma_dir": "db_atendimento"

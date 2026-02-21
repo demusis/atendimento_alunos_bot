@@ -59,8 +59,18 @@ class TelegramBotController:
         """
         import json, subprocess, sys
         
-        action_data["chroma_dir"] = self._chroma_dir
-        action_data["model_name"] = self._embedding_model
+        # Load latest settings
+        provider = self.config_manager.get("embedding_provider", "ollama")
+        if provider == "openrouter":
+            model_name = self.config_manager.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b")
+        else:
+            model_name = self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
+            
+        action_data["chroma_dir"] = self.config_manager.get("chroma_dir") or ""
+        action_data["model_name"] = model_name
+        action_data["embedding_provider"] = provider
+        action_data["api_key"] = self.config_manager.get("openrouter_key", "")
+        
         worker_data = json.dumps(action_data)
         
         loop = asyncio.get_running_loop()

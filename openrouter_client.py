@@ -19,6 +19,27 @@ class OpenRouterAdapter:
         self.api_key = api_key
         self.base_url = "https://openrouter.ai/api/v1"
 
+    def get_embeddings(self, model: str, texts: list[str]) -> list[list[float]]:
+        """
+        Get embeddings for a list of texts using OpenRouter.
+        """
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/demusis/atendimento_alunos_bot",
+        }
+        
+        payload = {
+            "model": model,
+            "input": texts
+        }
+        
+        response = requests.post(f"{self.base_url}/embeddings", headers=headers, json=payload)
+        response.raise_for_status()
+        
+        data = response.json()
+        return [item["embedding"] for item in data["data"]]
+
     def generate_response(
         self, 
         model: str, 

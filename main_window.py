@@ -125,10 +125,24 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
         
+        # Document List Table
+        layout.addWidget(QLabel("<b>📄 Documentos na Base:</b>"))
+        self.table_knowledge = QTableWidget(0, 2)
+        self.table_knowledge.setHorizontalHeaderLabels(["Arquivo", "Ações"])
+        self.table_knowledge.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table_knowledge)
+        
+        btn_refresh_list = QPushButton("Atualizar Lista")
+        btn_refresh_list.clicked.connect(self.refresh_knowledge_list)
+        layout.addWidget(btn_refresh_list)
+        
         layout.addStretch()
 
     def init_settings_tab(self):
         """Setup the Configuration tab."""
+        # Initial list refresh
+        QTimer.singleShot(1000, self.refresh_knowledge_list)
+        
         layout = QFormLayout(self.tab_settings)
         
         # Provider Selection
@@ -138,6 +152,12 @@ class MainWindow(QMainWindow):
         
         self.input_telegram_token = QLineEdit()
         self.input_telegram_token.setEchoMode(QLineEdit.EchoMode.Password)
+        
+        self.input_embed_provider = QComboBox()
+        self.input_embed_provider.addItems(["Ollama", "OpenRouter"])
+        
+        self.input_embed_model = QComboBox()
+        self.input_embed_model.setEditable(True)
         
         self.input_admin_id = QLineEdit()
         self.input_admin_id.setPlaceholderText("IDs separados por vírgula (ex: 123456,789012)")
@@ -198,8 +218,10 @@ class MainWindow(QMainWindow):
         layout.addRow(self.lbl_ollama_url, self.input_ollama_url)
         layout.addRow(self.lbl_or_key, self.input_openrouter_key)
         
-        layout.addRow("Modelo (Nome):", self.input_model_name)
+        layout.addRow("Modelo (IA):", self.input_model_name)
         layout.addRow("Prompt do Sistema:", self.input_sys_prompt)
+        layout.addRow("Provedor de Embedding:", self.input_embed_provider)
+        layout.addRow("Modelo Embedding:", self.input_embed_model)
         layout.addRow("Temperatura:", self.input_temp)
         layout.addRow("Máx Tokens:", self.input_max_token)
         layout.addRow("Memória de Busca (K):", self.input_rag_k)
@@ -244,6 +266,8 @@ class MainWindow(QMainWindow):
         self.input_openrouter_key.textChanged.connect(self.trigger_autosave)
         self.input_model_name.currentTextChanged.connect(self.trigger_autosave)
         self.input_sys_prompt.textChanged.connect(self.trigger_autosave)
+        self.input_embed_provider.currentTextChanged.connect(self.trigger_autosave)
+        self.input_embed_model.currentTextChanged.connect(self.trigger_autosave)
         self.input_temp.valueChanged.connect(self.trigger_autosave)
         self.input_max_token.valueChanged.connect(self.trigger_autosave)
         self.input_rag_k.valueChanged.connect(self.trigger_autosave)
@@ -295,6 +319,14 @@ class MainWindow(QMainWindow):
             updates["openrouter_model"] = self.input_model_name.currentText()
 
         updates["system_prompt"] = self.input_sys_prompt.toPlainText()
+        updates["embedding_provider"] = self.input_embed_provider.currentText().lower()
+        
+        embed_model = self.input_embed_model.currentText()
+        if updates["embedding_provider"] == "openrouter":
+            updates["openrouter_embedding_model"] = embed_model
+        else:
+            updates["ollama_embedding_model"] = embed_model
+        
         updates["temperature"] = self.input_temp.value()
         updates["max_tokens"] = self.input_max_token.value()
         updates["rag_k"] = self.input_rag_k.value()
@@ -341,6 +373,15 @@ class MainWindow(QMainWindow):
                 self.input_model_name.setCurrentText(data.get("openrouter_model", "openai/gpt-3.5-turbo"))
 
             self.input_sys_prompt.setText(data.get("system_prompt", ""))
+            
+            emb_prov = data.get("embedding_provider", "ollama").capitalize()
+            self.input_embed_provider.setCurrentText(emb_prov)
+            
+            if emb_prov.lower() == "openrouter":
+                self.input_embed_model.setCurrentText(data.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b"))
+            else:
+                self.input_embed_model.setCurrentText(data.get("ollama_embedding_model", "nomic-embed-text"))
+
             self.input_temp.setValue(data.get("temperature", 0.7))
             self.input_max_token.setValue(data.get("max_tokens", 2048))
             self.input_rag_k.setValue(data.get("rag_k", 8))
@@ -496,6 +537,8 @@ class MainWindow(QMainWindow):
         
         # Poll for completion
         self._monitor_future(future, self._on_ingest_complete)
+        # Refresh list after a delay
+        QTimer.singleShot(2000, self.refresh_knowledge_list)
 
     def clear_db(self):
         """Clear the vector database."""
@@ -533,7 +576,7 @@ class MainWindow(QMainWindow):
             return await loop.run_in_executor(None, sync_clear)
         
         future = self.async_worker.submit(do_clear())
-        self._monitor_future(future, lambda res: self.text_logs.append(f">> {res}"))
+        self._monitor_future(future, lambda res: [self.text_logs.append(f">> {res}"), self.refresh_knowledge_list()])
 
     def _monitor_future(self, future, callback):
         """Helper to check future completion."""
@@ -565,4 +608,125 @@ class MainWindow(QMainWindow):
         self.text_logs.append(msg)
         QMessageBox.information(self, "Ingestão Concluída", msg)
         self.btn_ingest.setEnabled(True)
+        self.refresh_knowledge_list()
+
+    def refresh_knowledge_list(self):
+        """Fetch and display the list of documents in the vector store."""
+        import json, subprocess
+        
+        # Pull latest settings
+        provider = self.input_embed_provider.currentText().lower()
+        if provider == "openrouter":
+            model_name = self.config_manager.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b")
+        else:
+            model_name = self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
+            
+        chroma_dir = self.config_manager.get("chroma_dir", "") or ""
+        api_key = self.config_manager.get("openrouter_key", "")
+        
+        worker_data = json.dumps({
+            "action": "list",
+            "chroma_dir": chroma_dir,
+            "model_name": model_name,
+            "embedding_provider": provider,
+            "api_key": api_key
+        })
+        worker_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingest_worker.py")
+        
+        def sync_list():
+            import sys
+            result = subprocess.run(
+                [sys.executable, worker_script],
+                input=worker_data,
+                capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            if result.returncode != 0:
+                return []
+            output = result.stdout.strip()
+            last_line = output.split('\n')[-1]
+            data = json.loads(last_line)
+            return data.get("result", [])
+        
+        async def do_list():
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, sync_list)
+        
+        def update_table(file_list):
+            self.table_knowledge.setRowCount(0)
+            for filename in file_list:
+                row = self.table_knowledge.rowCount()
+                self.table_knowledge.insertRow(row)
+                
+                # Filename item
+                self.table_knowledge.setItem(row, 0, QTableWidgetItem(filename))
+                
+                # Delete button
+                btn_del = QPushButton("Excluir")
+                btn_del.setStyleSheet("background-color: #ff5555; color: white;")
+                btn_del.clicked.connect(lambda chk=False, f=filename: self.delete_knowledge_file(f))
+                self.table_knowledge.setCellWidget(row, 1, btn_del)
+
+        future = self.async_worker.submit(do_list())
+        self._monitor_future(future, update_table)
+
+    def delete_knowledge_file(self, filename):
+        """Ask for confirmation and delete a specific document."""
+        reply = QMessageBox.question(
+            self, "Confirmar Exclusão", 
+            f"Deseja realmente excluir '{filename}' da base de conhecimento?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.No:
+            return
+            
+        import json, subprocess
+        
+        provider = self.input_embed_provider.currentText().lower()
+        if provider == "openrouter":
+            model_name = self.config_manager.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b")
+        else:
+            model_name = self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
+            
+        chroma_dir = self.config_manager.get("chroma_dir", "") or ""
+        api_key = self.config_manager.get("openrouter_key", "")
+        
+        worker_data = json.dumps({
+            "action": "delete",
+            "filename": filename,
+            "chroma_dir": chroma_dir,
+            "model_name": model_name,
+            "embedding_provider": provider,
+            "api_key": api_key
+        })
+        worker_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingest_worker.py")
+        
+        def sync_delete():
+            import sys
+            result = subprocess.run(
+                [sys.executable, worker_script],
+                input=worker_data,
+                capture_output=True, text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            if result.returncode != 0:
+                return {"ok": False, "error": "Process failed"}
+            output = result.stdout.strip()
+            last_line = output.split('\n')[-1]
+            return json.loads(last_line)
+            
+        async def do_delete():
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, sync_delete)
+            
+        def on_deleted(res):
+            if res.get("ok"):
+                self.text_logs.append(f">> Arquivo '{filename}' excluído com sucesso.")
+                self.refresh_knowledge_list()
+            else:
+                QMessageBox.warning(self, "Erro", f"Falha ao excluir: {res.get('error')}")
+
+        future = self.async_worker.submit(do_delete())
+        self._monitor_future(future, on_deleted)
 

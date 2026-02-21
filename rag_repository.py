@@ -16,32 +16,62 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
+
+class OpenRouterEmbeddings(Embeddings):
+    """
+    Custom Embeddings class for OpenRouter.
+    """
+    def __init__(self, model: str, api_key: str):
+        self.model = model
+        self.api_key = api_key
+        from openrouter_client import OpenRouterAdapter
+        self.adapter = OpenRouterAdapter(api_key=api_key)
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self.adapter.get_embeddings(self.model, texts)
+
+    def embed_query(self, text: str) -> List[float]:
+        return self.adapter.get_embeddings(self.model, [text])[0]
 
 class VectorStoreRepository:
     """
     Repository for managing document ingestion and vector retrieval.
-    Uses ChromaDB for storage and OllamaEmbeddings for vectorization.
     """
 
-    def __init__(self, persist_directory: str = None, model_name: str = "nomic-embed-text") -> None:
+    def __init__(
+        self, 
+        persist_directory: str = None, 
+        model_name: str = "nomic-embed-text",
+        provider: str = "ollama",
+        api_key: str = ""
+    ) -> None:
         """
         Initialize the VectorStoreRepository.
 
         Parameters
         ----------
         persist_directory : str, optional
-            Path to persist the ChromaDB database. Defaults to a local AppData path
-            to avoid performance issues with cloud-synced drives.
+            Path to persist the ChromaDB database.
         model_name : str, optional
-            Name of the embedding model to use, by default "nomic-embed-text".
+            Name of the embedding model to use.
+        provider : str, optional
+            Embedding provider ("ollama" or "openrouter").
+        api_key : str, optional
+            OpenRouter API Key if provider is "openrouter".
         """
         if persist_directory is None:
-            import tempfile
             appdata = os.path.join(os.path.expanduser("~"), ".atendimento_bot")
             persist_directory = os.path.join(appdata, "chroma_db")
             os.makedirs(persist_directory, exist_ok=True)
+        
         self.persist_directory = persist_directory
-        self.embedding_function = OllamaEmbeddings(model=model_name)
+        
+        if provider == "openrouter":
+            self.embedding_function = OpenRouterEmbeddings(model=model_name, api_key=api_key)
+        else:
+            self.embedding_function = OllamaEmbeddings(model=model_name)
+            
         self.vector_store: Optional[Chroma] = None
         
         # Initialize/Load DB
