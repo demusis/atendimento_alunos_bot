@@ -97,8 +97,39 @@ class OpenRouterAdapter:
 
     def list_models(self) -> list[str]:
         """
-        List models from OpenRouter is complex (requires GET /models).
-        For simplicity, we return a popular subset or implement fetch.
+        Fetch available models from OpenRouter API.
+        
+        Returns
+        -------
+        list[str]
+            Sorted list of model IDs (e.g., "openai/gpt-4o").
         """
-        # Minimal implementation relying on manual entry or simple fetch
-        return ["openai/gpt-3.5-turbo", "anthropic/claude-3-haiku", "google/gemini-flash-1.5"]
+        url = f"{self.base_url}/models"
+        try:
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            
+            models = []
+            for model in data.get("data", []):
+                model_id = model.get("id", "")
+                if model_id:
+                    models.append(model_id)
+            
+            if models:
+                return sorted(models)
+        except Exception as e:
+            print(f"Erro ao buscar modelos do OpenRouter: {e}")
+        
+        # Fallback: curated list if API fails
+        return [
+            "openai/gpt-4o-mini",
+            "openai/gpt-4o",
+            "anthropic/claude-3-haiku",
+            "anthropic/claude-3.5-sonnet",
+            "google/gemini-flash-1.5",
+            "google/gemini-pro-1.5",
+            "meta-llama/llama-3.1-8b-instruct",
+            "mistralai/mistral-7b-instruct",
+            "deepseek/deepseek-chat",
+        ]
