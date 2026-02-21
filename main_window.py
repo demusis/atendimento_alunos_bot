@@ -120,11 +120,6 @@ class MainWindow(QMainWindow):
         btn_clear.clicked.connect(self.clear_db)
         layout.addWidget(btn_clear)
 
-        # Progress
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setValue(0)
-        layout.addWidget(self.progress_bar)
-        
         # Document List Table
         layout.addWidget(QLabel("<b>📄 Documentos na Base:</b>"))
         self.table_knowledge = QTableWidget(0, 2)
@@ -543,7 +538,6 @@ class MainWindow(QMainWindow):
             self.text_logs.append(f">> Arquivo não encontrado: '{fname}'")
             return
             
-        self.progress_bar.setValue(10)
         self.btn_ingest.setEnabled(False)
         self.append_log(f">> [PROCESSO] Iniciando ingestão de '{os.path.basename(fname)}'...")
         
@@ -671,14 +665,12 @@ class MainWindow(QMainWindow):
                     error_details = traceback.format_exception(type(e), e, e.__traceback__)
                     self.append_log(f">> Tarefa Falhou: {e}")
                     self.append_log(f">> Detalhes: {''.join(error_details[-3:])}")
-                    self.progress_bar.setValue(0)
                     self.btn_ingest.setEnabled(True)
         
         timer.timeout.connect(check)
         timer.start(500) # Check every 500ms
 
     def _on_ingest_complete(self, result):
-        self.progress_bar.setValue(100)
         chunks = result.get('chunks_count', 0)
         filename = result.get('filename', 'arquivo')
         msg = f">> Sucesso: {chunks} fragmentos ingeridos de '{filename}'."

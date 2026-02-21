@@ -1,125 +1,116 @@
-# 🤖 Bot de Atendimento Acadêmico com IA (RAG)
+# 🤖 Assistente Acadêmico Inteligente (IA + RAG)
 
-Este projeto é um assistente inteligente projetado para o atendimento de alunos via Telegram. Ele utiliza a técnica de **RAG (Retrieval-Augmented Generation)** para responder perguntas baseando-se em documentos reais (Cronogramas, Horários, Ementas) e pode ser executado tanto em computadores pessoais quanto em servidores de baixo custo como o **Raspberry Pi 4**.
+Este projeto é uma solução completa de atendimento automatizado para alunos via Telegram. Ele utiliza a técnica de **RAG (Retrieval-Augmented Generation)**, permitindo que a Inteligência Artificial responda dúvidas baseando-se em documentos reais e atualizados (PDFs, Horários, Ementas, etc.), com foco especial em privacidade, velocidade e baixo custo de manutenção.
 
----
-
-## 🌟 Funcionalidades Principais
-
-*   **Busca Semântica (RAG)**: Responde dúvidas acadêmicas com base exclusiva no conteúdo dos seus documentos.
-*   **Menu de Acesso Rápido**: Botões interativos para "Horário", "Cronograma" e "Materiais".
-*   **Gestão de Arquivos**: Envio direto de documentos PDF/DOCX/JPG através de pastas físicas ou via chat (para admins).
-*   **Híbrido de IA**: Suporte para modelos locais (**Ollama**) ou em nuvem (**OpenRouter**).
-*   **Dual Mode**: Interface Gráfica (GUI) para iniciantes e Modo Linha de Comando (CLI) para servidores.
+O sistema foi otimizado para rodar em hardware doméstico (Windows/Mac/Linux) ou em servidores de pequeno porte como o **Raspberry Pi 4 (8GB)**.
 
 ---
 
-## 🖥️ Instalação no PC (Windows)
+## 🌟 Funcionalidades de Elite
 
-A versão para Windows possui uma interface amigável para gerenciamento e visualização de logs em tempo real.
+*   **Busca Semântica Avançada (RAG)**: O bot não apenas conversa, ele "lê" seus documentos. Suporta arquivos `.pdf`, `.docx`, `.txt`, `.csv` e `.md`.
+*   **Gestão Híbrida de Provedores**:
+    *   **Local (Ollama)**: Privacidade total e custo zero usando modelos como `Llama3` ou `Qwen3`.
+    *   **Nuvem (OpenRouter)**: Acesso a modelos de ponta (GPT-4o, Claude 3.5) com latência reduzida.
+*   **Limpeza Inteligente de Fórmulas Matémativas**: Tradução automática de LaTeX para texto simples (ex: `\frac{a}{b} -> (a/b)`), garantindo que o aluno receba respostas legíveis no celular.
+*   **Controle de Fluxo e Segurança**:
+    *   **Rate Limiting**: Proteção contra spam de mensagens por usuário.
+    *   **Admin Dashboard**: Uma interface PyQt6 completa para monitorar logs, trocar modelos e gerenciar a base de conhecimento.
+*   **Comandos Dinâmicos via Telegram**: Administradores podem gerenciar o bot sem sair do celular.
+*   **Otimização para Raspberry Pi**: Modo "Headless" (CLI) com script de instalação automatizado.
 
-### Pré-requisitos
-- Python 3.10 ou superior instalado.
-- [Ollama](https://ollama.com) (opcional, se for usar IA local).
+---
 
-### Passo a Passo
-1.  **Clone o repositório:**
+## 🛠️ Arquitetura do Sistema
+
+O projeto é dividido em módulos para garantir estabilidade:
+- **`main_window.py`**: Interface administrativa (PyQt6). centraliza configurações e monitoramento.
+- **`telegram_controller.py`**: O "cérebro" das interações. Gerencia sessões, comandos e fluxo RAG.
+- **`rag_repository.py`**: Motor de busca vetorial utilizando **ChromaDB**.
+- **`ingest_worker.py`**: Processo em segundo plano que evita travamentos da interface e conflitos de escrita no banco de dados.
+
+---
+
+## 🖥️ Instalação no Computador (Windows/Linux/Mac)
+
+1.  **Requisitos**: Python 3.13+ e o gerenciador de pacotes `pip`.
+2.  **Clone e Instalação**:
     ```bash
     git clone https://github.com/demusis/atendimento_alunos_bot.git
     cd atendimento_alunos_bot
-    ```
-2.  **Instale as dependências:**
-    ```bash
     pip install -r requirements.txt
     ```
-3.  **Configure o arquivo inicial:**
-    - Renomeie o arquivo `config_example.json` para `config.json`.
-    - Insira seu **Token do Telegram** e sua chave **OpenRouter** (se for o caso).
-4.  **Inicie o aplicativo:**
+3.  **Configuração Inicial**:
+    - Renomeie `config_example.json` para `config.json`.
+    - Insira seu **Telegram Token** (obtido via @BotFather).
+    - Insira seu **Admin ID** (seu ID numérico, use `/meuid` no bot para descobrir).
+4.  **Execução**:
     ```bash
     python main.py
     ```
-5.  **Na Interface:**
-    - Use a aba **Configuração** para ajustar modelos, temperatura e o parâmetro **K (Memória de Busca)**.
-    - Na aba **Terminal**, clique em **Iniciar Bot**.
 
 ---
 
-## 🍓 Instalação no Raspberry Pi 4 (Linux / Headless)
+## 🍓 Servidor Raspberry Pi 4 (8GB)
 
-O bot foi otimizado para rodar em modo silencioso no Raspberry Pi 4, economizando memória e CPU.
+O bot foi desenhado para ser resiliente no RPi4. A recomendação é usar o **Modo Híbrido**: Busca local rápida + Geração na Nuvem.
 
-### Pré-requisitos
-- **Raspberry Pi OS (64-bit)** recomendado.
-- Python 3.10+.
-
-### Instalação Automatizada
-Para facilitar a instalação no RPi4, utilize o script de automação incluso:
-
-1.  **Dê permissão ao instalador:**
-    ```bash
-    chmod +x install_rp4.sh
-    ```
-2.  **Execute a instalação:**
-    ```bash
-    ./install_rp4.sh
-    ```
-    *Este script criará o ambiente virtual (venv), instalará as dependências do sistema e do Python, e configurará a pasta do banco de dados automaticamente.*
-
-3.  **Configuração:**
-    - Edite o arquivo `config.json` que foi criado automaticamente na pasta raiz com suas credenciais do Telegram e OpenRouter.
-
-4.  **Inicie o bot:**
-    ```bash
-    ./start_rp4.sh
-    ```
-
----
-
-## 🕹️ Modos de Operação
-
-### Modo GUI (Interface Gráfica)
-Basta rodar `python main.py`. Ideal para configuração inicial e monitoramento visual.
-
-### Modo CLI (Texto / Terminal)
-Ideal para rodar 24h por dia em servidores. Se o sistema não detectar um monitor, ele entrará neste modo automaticamente, ou você pode forçar via:
+### Instalação em um Comando
+No terminal do seu Raspberry, execute:
 ```bash
-python main.py --cli
+bash install_rp4.sh
 ```
-*   **Encerrar com segurança**: Pressione `CTRL+C` no terminal. O bot salvará os logs e fechará as sessões antes de sair.
+**O que o script faz?**
+- Instala o **Ollama** automaticamente.
+- Baixa os modelos de embedding recomendados: `nomic-embed-text` (Leve) e `qwen3-embedding` (Preciso).
+- Cria o ambiente virtual e instala dependências.
+- Configura o serviço de inicialização automática (**systemd**).
+
+### Fluxo de Trabalho de Alta Performance
+Dica de mestre: Você pode gerar o banco de dados de conhecimento no seu PC (mais rápido) e simplesmente copiar a pasta `db_atendimento` para o Raspberry Pi. O sistema reconhecerá os arquivos instantaneamente!
 
 ---
 
-## 📁 Estrutura da Pasta `arquivos`
+## 🕹️ Comandos de Administrador (Telegram)
 
-O bot gerencia os botões do menu principal baseando-se nos nomes dos arquivos dentro desta pasta:
+Para IDs configurados como administrador, os seguintes comandos são habilitados:
 
-*   **Botão Horário**: Envia todos os arquivos iniciados com `horario` (ex: `horario_2024.pdf`).
-*   **Botão Cronograma**: Envia todos os arquivos iniciados com `cronograma` (ex: `cronograma_algoritmos.docx`).
-*   **Botão Materiais**: Exibe o texto personalizado contido no arquivo `materiais.txt`.
-
----
-
-## 🛠️ Comandos de Administrador
-
-Se o seu ID do Telegram estiver configurado no campo `admin_id` do `config.json`, você terá acesso a:
-
-*   `/status`: Relatório completo da saúde do sistema, latência da IA e estatísticas do banco de dados.
-*   `/aviso [mensagem]`: Envia um broadcast para todos os usuários cadastrados.
-*   `/ia [modelo]`: Troca o modelo de IA em tempo real via chat.
-*   `/prompt [texto]`: Altera as instruções de comportamento da IA sem reiniciar o bot.
-*   **Upload de Documentos**: Basta arrastar um arquivo para o chat com o bot e ele será ingerido automaticamente na base RAG.
+*   `/ia [nome_do_modelo]`: Lista modelos disponíveis ou troca o modelo de geração.
+*   `/embedding [modelo]`: Lista ou altera o modelo de busca vetorial.
+*   `/limpar`: Apaga toda a base de conhecimento (necessário ao trocar de modelo de embedding).
+*   `/status`: Relatório de saúde, uso de memória e latência do sistema.
+*   `/aviso [texto]`: Envia um comunicado para TODOS os usuários do bot.
+*   `/admin_summary [dias]`: A IA analisa os logs e gera um resumo dos principais problemas levantados pelos alunos.
+*   **Envio de Arquivos**: Envie um PDF/TXT diretamente para o bot no chat privado para adicioná-lo à base instantaneamente.
 
 ---
 
-## ⚙️ Configurações Importantes (`config.json`)
+## 📁 Organização de Pastas de Conhecimento
 
-*   `rag_k`: Define quantos trechos de documentos a IA lerá antes de responder. (Padrão: 8).
-*   `chroma_dir`: Caminho absoluto para a pasta onde o banco vetorial será salvo.
-*   `ai_provider`: Define se o bot usa `ollama` ou `openrouter`.
+O bot monitora a pasta `arquivos` e indexa:
+1.  **`horario*.*`**: Arquivos de PDF/Imagens vinculados ao botão "Horário".
+2.  **`cronograma*.*`**: Arquivos vinculados ao botão "Cronograma".
+3.  **`materiais.txt`**: Link de pastas ou orientações fixas.
+4.  **`faq.txt`**: Base de perguntas frequentes para resposta rápida.
 
 ---
 
-## 📊 Analytics e Privacidade
+## ⚙️ Configurações Técnicas (`config.json`)
 
-As interações são salvas em `history.jsonl`. O sistema anonimiza os IDs dos usuários via Hash SHA-256 para garantir a privacidade dos alunos, permitindo apenas a análise estatística das dúvidas enviadas.
+| Parâmetro | Descrição | Sugestão |
+| :--- | :--- | :--- |
+| `ai_provider` | `ollama` ou `openrouter` | `openrouter` (para RPi4) |
+| `embedding_provider` | `ollama` ou `openrouter` | `ollama` (Velocidade local) |
+| `ollama_embedding_model` | Modelo de busca local | `nomic-embed-text` |
+| `rag_k` | Quantidade de trechos recuperados | `8` |
+| `rate_limit_per_minute` | Teto de mensagens/usuário | `10` |
+| `chroma_dir` | Local físico do banco | `C:/bot/db` ou `/home/pi/db` |
+
+---
+
+## 📊 Privacidade e Segurança
+
+Nenhuma conversa é enviada para treinamento de modelos de terceiros se você usar o modo 100% local. Caso use o modo híbrido, as mensagens passam pelo OpenRouter de forma anonimizada. Os arquivos originais (PDFs) permanecem localmente no seu hardware, sendo enviados para a IA apenas trechos específicos para resposta.
+
+---
+**Desenvolvido para facilitar o suporte acadêmico e democratizar o acesso à informação.** 📚🤖
