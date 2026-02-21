@@ -1,7 +1,9 @@
 import logging
 import asyncio
 import os
+import time
 from typing import Optional, Dict, Any, List
+from collections import deque
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from config_manager import ConfigurationManager
@@ -35,6 +37,12 @@ class TelegramBotController:
         self.application: Optional[Application] = None
         self._is_running = False
         self._user_last_greeting: Dict[int, str] = {}  # user_id -> 'YYYY-MM-DD'
+        
+        # Feature 1: Per-user chat history
+        self._chat_history: Dict[int, deque] = {}  # user_id -> deque of (question, answer)
+        
+        # Feature 3: Rate limiting
+        self._user_message_times: Dict[int, list] = {}  # user_id -> list of timestamps
 
     @staticmethod
     def _clean_markdown(text: str) -> str:
@@ -108,6 +116,7 @@ class TelegramBotController:
         self.application.add_handler(CommandHandler("limpar", self._cmd_clear_database))
         self.application.add_handler(CommandHandler("admin_summary", self._cmd_admin_summary))
         self.application.add_handler(CommandHandler("insight", self._cmd_admin_insight))
+        self.application.add_handler(CommandHandler("faq", self._cmd_faq))
         self.application.add_handler(CallbackQueryHandler(self._handle_button))
         self.application.add_handler(MessageHandler(filters.Document.ALL, self._handle_document))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
@@ -503,10 +512,107 @@ class TelegramBotController:
             ],
             [
                 InlineKeyboardButton("Materiais", callback_data="btn_materiais"),
+                InlineKeyboardButton("FAQ", callback_data="btn_faq"),
+            ],
+            [
                 InlineKeyboardButton("Falar com o Professor", callback_data="btn_professor"),
             ]
         ]
         return InlineKeyboardMarkup(keyboard)
+
+    def _check_rate_limit(self, user_id: int) -> bool:
+        """Check if a user has exceeded the rate limit. Returns True if allowed."""
+        limit = self.config_manager.get("rate_limit_per_minute", 10)
+        now = time.time()
+        
+        if user_id not in self._user_message_times:
+            self._user_message_times[user_id] = []
+        
+        # Remove timestamps older than 60 seconds
+        self._user_message_times[user_id] = [
+            t for t in self._user_message_times[user_id] if now - t < 60
+        ]
+        
+        if len(self._user_message_times[user_id]) >= limit:
+            return False  # Over limit
+        
+        self._user_message_times[user_id].append(now)
+        return True
+
+    def _add_to_history(self, user_id: int, question: str, answer: str) -> None:
+        """Add a question/answer pair to the user's chat history."""
+        max_size = self.config_manager.get("chat_history_size", 5)
+        if max_size <= 0:
+            return
+        
+        if user_id not in self._chat_history:
+            self._chat_history[user_id] = deque(maxlen=max_size)
+        
+        # Update maxlen if config changed
+        if self._chat_history[user_id].maxlen != max_size:
+            old = list(self._chat_history[user_id])
+            self._chat_history[user_id] = deque(old, maxlen=max_size)
+        
+        self._chat_history[user_id].append((question, answer))
+
+    def _get_history_text(self, user_id: int) -> str:
+        """Get formatted chat history for a user."""
+        if user_id not in self._chat_history or not self._chat_history[user_id]:
+            return ""
+        
+        lines = []
+        for q, a in self._chat_history[user_id]:
+            lines.append(f"Aluno: {q}")
+            lines.append(f"Assistente: {a}")
+        
+        return "\n".join(lines)
+
+    async def _notify_admin(self, message: str) -> None:
+        """Send an error notification to the admin via Telegram."""
+        try:
+            admin_id = self.config_manager.get("admin_id", "")
+            if admin_id and self.application:
+                await self.application.bot.send_message(
+                    chat_id=int(admin_id),
+                    text=f"⚠️ ALERTA DO BOT:\n\n{message}"
+                )
+        except Exception as e:
+            logger.error(f"Falha ao notificar admin: {e}")
+
+    async def _cmd_faq(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle the /faq command."""
+        if not update.message:
+            return
+        await self._show_faq_content(update.message)
+
+    async def _show_faq_content(self, target) -> None:
+        """Read and display FAQ content from 'arquivos/faq.txt'."""
+        try:
+            arquivos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arquivos")
+            file_path = os.path.join(arquivos_dir, "faq.txt")
+            
+            if not os.path.exists(file_path):
+                await target.reply_text(
+                    "Crie um arquivo chamado <code>faq.txt</code> na pasta <code>arquivos</code> "
+                    "para exibir as perguntas frequentes.",
+                    parse_mode="HTML"
+                )
+                return
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            if not content.strip():
+                await target.reply_text("O arquivo de FAQ está vazio.")
+                return
+
+            await target.reply_text(
+                f"<b>❓ Perguntas Frequentes</b>\n\n{content}",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Erro ao ler FAQ: {e}")
+            await target.reply_text(f"Erro ao processar FAQ: {e}")
 
     async def _send_start_menu(self, update: Update) -> None:
         """Send the start menu with interactive buttons."""
@@ -627,6 +733,9 @@ class TelegramBotController:
             await self._show_cronogramas(query)
         elif data == "btn_materiais":
             await self._show_materials(query)
+        elif data == "btn_faq":
+            await self._show_faq_content(query.message)
+            await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
         elif data == "btn_professor":
              await query.edit_message_text(
                  text="<b>Prof. Carlo Ralph De Musis</b>\n\n"
@@ -844,6 +953,13 @@ class TelegramBotController:
         user_id = update.effective_user.id
         logger.info(f"Mensagem recebida: {user_query}")
         
+        # Feature 3: Rate Limiting
+        if not self._check_rate_limit(user_id):
+            await update.message.reply_text(
+                "⏳ Você atingiu o limite de mensagens por minuto. Aguarde um momento antes de enviar outra."
+            )
+            return
+        
         # --- Handle Backslash Commands ---
         # If message starts with \ and isn't caught by CommandHandler (which expects /)
         if user_query.startswith('\\'):
@@ -883,6 +999,8 @@ class TelegramBotController:
             elif cmd_part == "conhecimento":
                 context.args = parts[1:] if len(parts) > 1 else []
                 return await self._cmd_add_knowledge_text(update, context)
+            elif cmd_part == "faq":
+                return await self._cmd_faq(update, context)
             # If it's a backslash but not a command, we continue to RAG if appropriate
             elif any(cmd_part == name for name in ["insight", "bd", "limpar", "admin_summary"]):
                 # Admin commands
@@ -942,8 +1060,15 @@ class TelegramBotController:
         base_system = self.config_manager.get("system_prompt", "Você é um assistente útil.")
         system_prompt = f"{base_system}\n\n[CONTEXTO TEMPORAL: Hoje é {date_str}]"
         
+        # Feature 1: Include chat history
+        history_text = self._get_history_text(user_id)
+        history_block = ""
+        if history_text:
+            history_block = f"\nHistórico da conversa com este aluno:\n{history_text}\n"
+        
         full_prompt = (
-            f"Contexto recuperado:\n{context_text}\n\n"
+            f"Contexto recuperado:\n{context_text}\n"
+            f"{history_block}\n"
             f"Pergunta do Usuário: {user_query}\n"
             f"Por favor, responda a pergunta do usuário usando o contexto fornecido."
         )
@@ -994,6 +1119,9 @@ class TelegramBotController:
                 response_text = self._clean_markdown(response_text)
                 await update.message.reply_text(response_text) # type: ignore
                 await update.message.reply_text("Selecione uma opção ou digite outra dúvida:", reply_markup=self._get_menu_keyboard()) # type: ignore
+                
+                # Feature 1: Save to chat history
+                self._add_to_history(user_id, user_query, response_text)
             else:
                  await update.message.reply_text("Desculpe, não consegui gerar uma resposta.") # type: ignore
             
@@ -1014,3 +1142,5 @@ class TelegramBotController:
         except Exception as e:
             logger.error(f"Erro ao gerar resposta: {e}")
             await update.message.reply_text("Ocorreu um erro ao processar sua solicitação.") # type: ignore
+            # Feature 5: Notify admin about critical errors
+            await self._notify_admin(f"Erro ao gerar resposta para o usuário {user_id}:\n{str(e)}")

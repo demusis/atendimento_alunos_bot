@@ -166,6 +166,16 @@ class MainWindow(QMainWindow):
         self.input_rag_k.setRange(1, 50)
         self.input_rag_k.setSuffix(" trechos")
         
+        self.input_chat_history = QSpinBox()
+        self.input_chat_history.setRange(0, 20)
+        self.input_chat_history.setSuffix(" mensagens")
+        self.input_chat_history.setToolTip("Quantas mensagens anteriores o bot lembra por aluno (0 = desativado)")
+        
+        self.input_rate_limit = QSpinBox()
+        self.input_rate_limit.setRange(1, 60)
+        self.input_rate_limit.setSuffix(" msg/min")
+        self.input_rate_limit.setToolTip("Máximo de mensagens por minuto por usuário")
+        
         # ChromaDB Directory
         chroma_layout = QHBoxLayout()
         chroma_layout.setContentsMargins(0, 0, 0, 0)
@@ -193,6 +203,8 @@ class MainWindow(QMainWindow):
         layout.addRow("Temperatura:", self.input_temp)
         layout.addRow("Máx Tokens:", self.input_max_token)
         layout.addRow("Memória de Busca (K):", self.input_rag_k)
+        layout.addRow("Histórico de Conversa:", self.input_chat_history)
+        layout.addRow("Limite de Mensagens:", self.input_rate_limit)
         layout.addRow("Diretório ChromaDB:", chroma_widget)
         
         # Setup Autosave
@@ -235,6 +247,8 @@ class MainWindow(QMainWindow):
         self.input_temp.valueChanged.connect(self.trigger_autosave)
         self.input_max_token.valueChanged.connect(self.trigger_autosave)
         self.input_rag_k.valueChanged.connect(self.trigger_autosave)
+        self.input_chat_history.valueChanged.connect(self.trigger_autosave)
+        self.input_rate_limit.valueChanged.connect(self.trigger_autosave)
         self.input_chroma_dir.textChanged.connect(self.trigger_autosave)
 
     def toggle_provider_ui(self, provider: str):
@@ -284,6 +298,8 @@ class MainWindow(QMainWindow):
         updates["temperature"] = self.input_temp.value()
         updates["max_tokens"] = self.input_max_token.value()
         updates["rag_k"] = self.input_rag_k.value()
+        updates["chat_history_size"] = self.input_chat_history.value()
+        updates["rate_limit_per_minute"] = self.input_rate_limit.value()
         updates["chroma_dir"] = self.input_chroma_dir.text()
 
         self.config_manager.update_batch(updates)
@@ -328,6 +344,8 @@ class MainWindow(QMainWindow):
             self.input_temp.setValue(data.get("temperature", 0.7))
             self.input_max_token.setValue(data.get("max_tokens", 2048))
             self.input_rag_k.setValue(data.get("rag_k", 8))
+            self.input_chat_history.setValue(data.get("chat_history_size", 5))
+            self.input_rate_limit.setValue(data.get("rate_limit_per_minute", 10))
             self.input_chroma_dir.setText(data.get("chroma_dir", ""))
         finally:
              self.input_provider.blockSignals(False)

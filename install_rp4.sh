@@ -52,7 +52,25 @@ fi
 echo -e "⚙️ 6. Ajustando permissões dos scripts..."
 chmod +x start_rp4.sh
 
-# 7. Resumo e Instruções
+# 7. Configurar Auto-Start (systemd)
+echo -e "🔄 7. Configurando inicialização automática..."
+SERVICE_FILE="telegram-bot.service"
+if [ -f "$SERVICE_FILE" ]; then
+    # Ajustar caminhos no arquivo de serviço
+    CURRENT_DIR=$(pwd)
+    CURRENT_USER=$(whoami)
+    sed "s|/home/pi/atendimento_alunos_bot|$CURRENT_DIR|g; s|User=pi|User=$CURRENT_USER|g" \
+        "$SERVICE_FILE" > /tmp/telegram-bot.service
+    sudo cp /tmp/telegram-bot.service /etc/systemd/system/telegram-bot.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable telegram-bot.service
+    echo -e "${GREEN}✅ Serviço systemd instalado! O bot iniciará automaticamente no boot.${NC}"
+    echo "   Para gerenciar: sudo systemctl {start|stop|restart|status} telegram-bot"
+else
+    echo -e "${RED}⚠️ Arquivo telegram-bot.service não encontrado. Auto-start não configurado.${NC}"
+fi
+
+# 8. Resumo e Instruções
 echo -e "${GREEN}"
 echo "--------------------------------------------------------"
 echo "        ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO!"
@@ -61,8 +79,12 @@ echo -e "${NC}"
 echo "Para iniciar o bot agora, use:"
 echo "./start_rp4.sh"
 echo ""
+echo "Para iniciar via systemd:"
+echo "sudo systemctl start telegram-bot"
+echo ""
 echo "Notas Importantes:"
 echo "1. Certifique-se de que o seu 'config.json' tem o Token do Telegram e a Key do OpenRouter."
 echo "2. O bot rodará em modo CLI (texto) para economizar recursos."
 echo "3. Se encontrar erros com o SQLite, o 'pysqlite3-binary' já foi incluído para corrigir."
+echo "4. O bot iniciará automaticamente quando o Raspberry Pi ligar."
 echo ""

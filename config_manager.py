@@ -62,6 +62,8 @@ class ConfigurationManager:
             "max_tokens": 2048,
             "ollama_url": "http://127.0.0.1:11434",
             "rag_k": 8,
+            "chat_history_size": 5,
+            "rate_limit_per_minute": 10,
             "chroma_dir": "db_atendimento"
         }
         self._config_data = default_config

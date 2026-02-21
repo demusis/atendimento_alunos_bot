@@ -1,0 +1,11 @@
+P: Como acesso o material das disciplinas?
+R: Clique no botão "Materiais" no menu principal ou digite /faq.
+
+P: Qual o horário de atendimento do professor?
+R: Os horários de atendimento estão disponíveis no botão "Horário" do menu.
+
+P: Como entro em contato com o professor?
+R: Clique no botão "Falar com o Professor" para ver os dados de contato.
+
+P: A IA pode me ajudar com dúvidas sobre a matéria?
+R: Sim! Basta digitar sua pergunta diretamente no chat que o assistente responderá com base nos materiais disponíveis.

@@ -1,0 +1,17 @@
+[Unit]
+Description=Assistente Acadêmico Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/atendimento_alunos_bot
+ExecStart=/home/pi/atendimento_alunos_bot/venv/bin/python3 main.py --cli
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
