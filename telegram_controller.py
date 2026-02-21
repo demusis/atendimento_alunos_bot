@@ -46,11 +46,54 @@ class TelegramBotController:
 
     @staticmethod
     def _clean_markdown(text: str) -> str:
-        """Strip markdown formatting from LLM responses."""
+        """Strip markdown and simplify LaTeX math formatting for plain text display."""
         import re
+        
+        # 1. Strip Common Markdown
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
         text = re.sub(r'\*(.+?)\*', r'\1', text)       # *italic*
         text = re.sub(r'^#{1,3}\s+', '', text, flags=re.MULTILINE)  # ### headers
+        
+        # 2. Handle LaTeX delimiters
+        text = re.sub(r'\$\$(.*?)\$\$', r'\1', text, flags=re.DOTALL) # $$block$$
+        text = re.sub(r'\$(.*?)\$', r'\1', text)                      # $inline$
+        text = re.sub(r'\\\[(.*?)\\\]', r'\1', text, flags=re.DOTALL) # \[block\]
+        text = re.sub(r'\\\((.*?)\\\)', r'\1', text)                  # \(inline\)
+        
+        # 3. Simplify common LaTeX math commands
+        replacements = [
+            (r'\\text\{(.+?)\}', r'\1'),            # \text{...} -> ...
+            (r'\\frac\{(.+?)\}\{(.+?)\}', r'(\1/\2)'), # \frac{a}{b} -> (a/b)
+            (r'\\times', 'x'),
+            (r'\\cdot', '·'),
+            (r'\\div', '/'),
+            (r'\\pm', '+/-'),
+            (r'\\approx', '≈'),
+            (r'\\leq', '<='),
+            (r'\\geq', '>='),
+            (r'\\neq', '!='),
+            (r'\\infty', '∞'),
+            (r'\\rightarrow', '→'),
+            (r'\\pi', 'π'),
+            (r'\\sqrt\{(.+?)\}', r'sqrt(\1)'),
+            (r'\\hat\{(.+?)\}', r'\1'),
+            (r'\\bar\{(.+?)\}', r'\1'),
+            (r'\\Delta', 'Δ'),
+            (r'\\alpha', 'α'),
+            (r'\\beta', 'β'),
+            (r'\\theta', 'θ'),
+            (r'\\{', '{'),
+            (r'\\}', '}'),
+            (r'\\_', '_'),
+            (r'\\ ', ' '),
+        ]
+        
+        for pattern, repl in replacements:
+            text = re.sub(pattern, repl, text)
+            
+        # 4. Final cleanup of any remaining backslashes before common chars
+        text = re.sub(r'\\([_#$!%&])', r'\1', text)
+        
         return text.strip()
 
     async def _run_chroma_worker(self, action_data: Dict[str, Any]) -> Any:
@@ -70,6 +113,7 @@ class TelegramBotController:
         action_data["model_name"] = model_name
         action_data["embedding_provider"] = provider
         action_data["api_key"] = self.config_manager.get("openrouter_key", "")
+        action_data["ollama_url"] = self.config_manager.get("ollama_url", "http://127.0.0.1:11434")
         
         worker_data = json.dumps(action_data)
         
@@ -115,6 +159,7 @@ class TelegramBotController:
         self.application.add_handler(CommandHandler("listar", self._cmd_list_documents))
         self.application.add_handler(CommandHandler("remover", self._cmd_delete_document))
         self.application.add_handler(CommandHandler("ia", self._cmd_list_models))
+        self.application.add_handler(CommandHandler("embedding", self._cmd_embedding))
         self.application.add_handler(CommandHandler("status", self._cmd_status))
         self.application.add_handler(CommandHandler("aviso", self._cmd_aviso))
         self.application.add_handler(CommandHandler("prompt", self._cmd_prompt))
@@ -180,6 +225,7 @@ class TelegramBotController:
                 "/listar - Lista arquivos na base de conhecimento\n"
                 "/remover <code>[arquivo]</code> - Remove um arquivo da base\n"
                 "/ia <code>[modelo]</code> - Lista ou troca o modelo de IA\n"
+                "/embedding <code>[modelo]</code> - Lista ou troca o modelo de Embedding\n"
                 "/limpar - Apaga toda a base de dados\n"
                 "/bd - Ajuda para ingestão de arquivos\n"
                 "/status - Status do sistema e da base\n"
@@ -322,6 +368,70 @@ class TelegramBotController:
             logger.error(f"Erro ao trocar modelo: {e}")
             await status_msg.edit_text(f"❌ Erro ao trocar modelo: {e}")
 
+    async def _cmd_embedding(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /embedding command - list or switch Embedding models."""
+        if not update.message:
+            return
+            
+        if not self._is_admin(update):
+            await update.message.reply_text("⛔ Acesso negado. Apenas administradores podem gerenciar modelos de Embedding.")
+            return
+            
+        provider = self.config_manager.get("embedding_provider", "ollama")
+        current_model = self.config_manager.get(f"{provider}_embedding_model", "Sem modelo configurado")
+        
+        # Scenario 1: List Models
+        if not context.args:
+            status_msg = await update.message.reply_text(f"🔎 Consultando modelos de Embedding no {provider.capitalize()}...")
+            try:
+                if provider == "ollama":
+                    models = self.ollama_adapter.list_models()
+                else:
+                    from openrouter_client import OpenRouterAdapter
+                    key = self.config_manager.get("openrouter_key", "")
+                    adapter = OpenRouterAdapter(api_key=key)
+                    models = adapter.list_models()
+                    
+                if not models:
+                    await status_msg.edit_text(f"Nenhum modelo encontrado no {provider.capitalize()}.\n\nModelo atual: <code>{current_model}</code>", parse_mode="HTML")
+                    return
+                
+                import html
+                models_list = "\n".join([f"- {html.escape(m)}" for m in models])
+                await status_msg.edit_text(
+                    f"🧠 <b>Modelos de Embedding ({provider.capitalize()}):</b>\n\n{models_list}\n\n"
+                    f"<b>Modelo atual:</b> <code>{html.escape(current_model)}</code>\n\n"
+                    "Para trocar, use: <code>/embedding [nome_do_modelo]</code>\n"
+                    "<i>⚠️ Nota: Mudar o modelo de embedding exige limpar e re-ingerir a base.</i>",
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Erro ao listar modelos de embedding: {e}")
+                await status_msg.edit_text(f"Erro ao consultar modelos.\n\nModelo atual: <code>{current_model}</code>", parse_mode="HTML")
+            return
+
+        # Scenario 2: Switch Model
+        import html
+        new_model = context.args[0]
+        status_msg = await update.message.reply_text(f"⚙️ Trocando modelo de embedding para: <code>{html.escape(new_model)}</code>...", parse_mode="HTML")
+        
+        try:
+            # Save based on current provider
+            conf_key = f"{provider}_embedding_model"
+            self.config_manager.set(conf_key, new_model)
+            
+            await status_msg.edit_text(
+                f"✅ Sucesso! O modelo de embedding foi alterado para: <code>{html.escape(new_model)}</code>\n\n"
+                "<b>IMPORTANTE:</b> Como as dimensões dos vetores podem ter mudado, você <u>DEVE</u> limpar a base de dados (/limpar) "
+                "e reenviar os documentos para que a busca continue funcionando.", 
+                parse_mode="HTML"
+            )
+            logger.info(f"Modelo de Embedding ({provider}) alterado para: {new_model}")
+            
+        except Exception as e:
+            logger.error(f"Erro ao trocar modelo de embedding: {e}")
+            await status_msg.edit_text(f"❌ Erro ao trocar modelo: {e}")
+
     async def _cmd_clear_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /limpar command - clear the entire database."""
         if not update.message:
@@ -412,7 +522,7 @@ class TelegramBotController:
             
             for u_id in user_ids:
                 try:
-                    await context.bot.send_message(chat_id=u_id, text=text_to_send, parse_mode="HTML")
+                    await context.bot.send_message(chat_id=int(u_id), text=text_to_send, parse_mode="HTML")
                     success_count += 1
                 except Exception as e:
                     logger.warning(f"Falha ao enviar para {u_id}: {e}")
@@ -736,8 +846,15 @@ class TelegramBotController:
     async def _handle_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle button clicks."""
         query = update.callback_query
-        await query.answer() # type: ignore
-        
+        if not query:
+            return
+            
+        # Answer immediately to avoid "Query is too old" timeout (Telegram limit is 10s)
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning(f"Could not answer callback query: {e}")
+            
         data = query.data
 
         # --- User Buttons ---
@@ -945,7 +1062,7 @@ class TelegramBotController:
             await update.message.reply_text(f"✅ Sucesso! {chunks} fragmentos adicionados à base.") # type: ignore
         except Exception as e:
             import traceback
-            logger.error(f"Erro na ingestão do arquivo: {type(e).__name__}: {e}")
+            logger.error(f"Erro na ingestão do arquivo: {type(e).__name}: {e}")
             logger.error(traceback.format_exc())
             try:
                 await update.message.reply_text(f"❌ Erro ao processar: {e}") # type: ignore
@@ -1012,6 +1129,9 @@ class TelegramBotController:
             elif cmd_part == "ia":
                 context.args = parts[1:] if len(parts) > 1 else []
                 return await self._cmd_list_models(update, context)
+            elif cmd_part == "embedding":
+                context.args = parts[1:] if len(parts) > 1 else []
+                return await self._cmd_embedding(update, context)
             elif cmd_part == "status":
                 return await self._cmd_status(update, context)
             elif cmd_part == "aviso":
@@ -1050,12 +1170,27 @@ class TelegramBotController:
             if update.effective_chat:
                 await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
+            emb_provider = self.config_manager.get("embedding_provider", "ollama")
+            
+            # Guard against model name contamination
+            if emb_provider == "openrouter":
+                model_name = self.config_manager.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b")
+            else:
+                model_name = self.config_manager.get("ollama_embedding_model", "qwen3-embedding:latest")
+
+            logger.info(f"Conectando ao provedor de Embeddings ({emb_provider}) - Modelo: {model_name}...")
+            
             rag_k = self.config_manager.get("rag_k", 8)
             result = await self._run_chroma_worker({
                 "action": "query",
                 "query": user_query,
-                "k": rag_k
+                "k": rag_k,
+                "model_name": model_name, # Overwrite with correct name for safety
+                "embedding_provider": emb_provider
             })
+            
+            logger.info(f"Conexão com Embeddings ({emb_provider}) bem-sucedida! {len(result)} trechos recuperados.")
+            
             # result is a list of dicts with page_content
             context_text = "\n\n".join([doc["page_content"] for doc in result])
             
@@ -1126,6 +1261,7 @@ class TelegramBotController:
             else:
                 # Default Ollama
                 model = self.config_manager.get("ollama_model", "llama3:latest")
+                logger.info(f"Iniciando geração com Ollama (Modelo: {model})...")
                 generator = self.ollama_adapter.generate_response(
                     model=model,
                     prompt=full_prompt,
@@ -1134,8 +1270,14 @@ class TelegramBotController:
                     max_tokens=max_tokens
                 )
             
+            chunk_count = 0
             for chunk in generator:
+                if chunk_count == 0:
+                     logger.info("Primeiro fragmento recebido da IA.")
                 response_text += chunk
+                chunk_count += 1
+            
+            logger.info(f"Geração concluída. Total de fragmentos: {chunk_count}. Tamanho: {len(response_text)} caracteres.")
                 
             # 4. Reply
             if response_text:

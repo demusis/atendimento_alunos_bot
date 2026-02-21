@@ -44,7 +44,8 @@ class VectorStoreRepository:
         persist_directory: str = None, 
         model_name: str = "nomic-embed-text",
         provider: str = "ollama",
-        api_key: str = ""
+        api_key: str = "",
+        base_url: str = "http://127.0.0.1:11434"
     ) -> None:
         """
         Initialize the VectorStoreRepository.
@@ -59,6 +60,8 @@ class VectorStoreRepository:
             Embedding provider ("ollama" or "openrouter").
         api_key : str, optional
             OpenRouter API Key if provider is "openrouter".
+        base_url : str, optional
+            Base URL for Ollama API.
         """
         if persist_directory is None:
             appdata = os.path.join(os.path.expanduser("~"), ".atendimento_bot")
@@ -70,7 +73,7 @@ class VectorStoreRepository:
         if provider == "openrouter":
             self.embedding_function = OpenRouterEmbeddings(model=model_name, api_key=api_key)
         else:
-            self.embedding_function = OllamaEmbeddings(model=model_name)
+            self.embedding_function = OllamaEmbeddings(model=model_name, base_url=base_url)
             
         self.vector_store: Optional[Chroma] = None
         
@@ -179,25 +182,27 @@ class VectorStoreRepository:
 
     def clear_database(self) -> str:
         """
-        Clear the vector database.
+        Clear the vector database by deleting the persistence directory.
+        This is necessary when switching between models with different dimensions.
         
         Returns
         -------
         str
             Status message.
         """
-        if self.vector_store:
-            # self.vector_store.delete_collection() # Deprecated in some versions, safer to use reset or re-init
-             # For robustness with basic Chroma client, simple re-init or deleting dir is often used,
-             # but standard LangChain Chroma wrapper has .delete_collection() or we delete docs.
-             # Note: deleting collection might require re-init.
-             
-             ids = self.vector_store.get().get('ids')
-             if ids:
-                 self.vector_store.delete(ids=ids)
-                 return "Database cleared."
-             return "Database already empty."
-        return "Error: Database not initialized."
+        try:
+            if os.path.exists(self.persist_directory):
+                # We need to close the connection if possible, but Chroma doesn't 
+                # expose an explicit close() easily in this wrapper.
+                # shutil.rmtree is the most effective way to RESET the dimension.
+                shutil.rmtree(self.persist_directory)
+                os.makedirs(self.persist_directory, exist_ok=True)
+                # Re-load an empty DB
+                self._load_db()
+                return "Banco de dados resetado completamente (inclusive dimensões)."
+            return "Diretório não encontrado."
+        except Exception as e:
+            return f"Erro ao limpar: {str(e)}"
 
     def list_documents(self) -> List[str]:
         """

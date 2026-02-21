@@ -17,24 +17,32 @@ def main():
         model_name = data.get("model_name", "nomic-embed-text")
         provider = data.get("embedding_provider", "ollama")
         api_key = data.get("api_key", "")
+        ollama_url = data.get("ollama_url", "http://127.0.0.1:11434")
+
+        if action == "clear":
+            import shutil
+            if chroma_dir and os.path.exists(chroma_dir):
+                shutil.rmtree(chroma_dir)
+                os.makedirs(chroma_dir, exist_ok=True)
+                print(json.dumps({"ok": True, "result": "Banco de dados resetado completamente (inclusive dimensões)."}))
+            else:
+                print(json.dumps({"ok": True, "result": "Diretório não encontrado, nada para limpar."}))
+            return
 
         # Import here, inside the clean subprocess
         from rag_repository import VectorStoreRepository
-
+        
         repo = VectorStoreRepository(
             persist_directory=chroma_dir, 
             model_name=model_name,
             provider=provider,
-            api_key=api_key
+            api_key=api_key,
+            base_url=ollama_url
         )
 
         if action == "ingest":
             file_path = data["file_path"]
             result = repo.ingest_file(file_path)
-            print(json.dumps({"ok": True, "result": result}))
-
-        elif action == "clear":
-            result = repo.clear_database()
             print(json.dumps({"ok": True, "result": result}))
 
         elif action == "query":

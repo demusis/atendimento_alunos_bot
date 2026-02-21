@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
         self.lbl_save_status.setStyleSheet("color: #00ff00; font-weight: bold;")
         layout.addRow("", self.lbl_save_status)
         
-        self.btn_refresh_models = QPushButton("Buscar modelos")
+        self.btn_refresh_models = QPushButton("Buscar Modelos")
         self.btn_refresh_models.clicked.connect(self.refresh_models)
         layout.addRow(self.btn_refresh_models)
         
@@ -259,14 +259,15 @@ class MainWindow(QMainWindow):
         self._save_timer.timeout.connect(self.persist_settings)
         
         # Connect signals
-        self.input_provider.currentTextChanged.connect(self.trigger_autosave)
+        self.input_provider.currentTextChanged.connect(self.on_ai_provider_changed)
+        self.input_embed_provider.currentTextChanged.connect(self.on_embed_provider_changed)
+        
         self.input_telegram_token.textChanged.connect(self.trigger_autosave)
         self.input_admin_id.textChanged.connect(self.trigger_autosave)
         self.input_ollama_url.textChanged.connect(self.trigger_autosave)
         self.input_openrouter_key.textChanged.connect(self.trigger_autosave)
         self.input_model_name.currentTextChanged.connect(self.trigger_autosave)
         self.input_sys_prompt.textChanged.connect(self.trigger_autosave)
-        self.input_embed_provider.currentTextChanged.connect(self.trigger_autosave)
         self.input_embed_model.currentTextChanged.connect(self.trigger_autosave)
         self.input_temp.valueChanged.connect(self.trigger_autosave)
         self.input_max_token.valueChanged.connect(self.trigger_autosave)
@@ -286,9 +287,35 @@ class MainWindow(QMainWindow):
         self.input_openrouter_key.setVisible(not is_ollama)
         
         if is_ollama:
-            self.btn_refresh_models.setText("Atualizar Modelos (Ollama)")
+            self.btn_refresh_models.setText("Buscar Modelos")
         else:
-            self.btn_refresh_models.setText("Listar Modelos Comuns (OpenRouter)")
+            self.btn_refresh_models.setText("Buscar Modelos")
+
+    def on_ai_provider_changed(self, provider: str):
+        """Handle AI provider swap by loading the correct model for that provider first."""
+        self.toggle_provider_ui(provider)
+        
+        self.input_model_name.blockSignals(True)
+        if provider.lower() == "ollama":
+            model = self.config_manager.get("ollama_model", "llama3:latest")
+        else:
+            model = self.config_manager.get("openrouter_model", "openai/gpt-3.5-turbo")
+        
+        self.input_model_name.setCurrentText(model)
+        self.input_model_name.blockSignals(False)
+        self.trigger_autosave()
+
+    def on_embed_provider_changed(self, provider: str):
+        """Handle Embedding provider swap by loading the correct model for that provider first."""
+        self.input_embed_model.blockSignals(True)
+        if provider.lower() == "ollama":
+            model = self.config_manager.get("ollama_embedding_model", "qwen3-embedding:latest")
+        else:
+            model = self.config_manager.get("openrouter_embedding_model", "openai/text-embedding-3-small")
+        
+        self.input_embed_model.setCurrentText(model)
+        self.input_embed_model.blockSignals(False)
+        self.trigger_autosave()
 
     @pyqtSlot()
     def trigger_autosave(self):
@@ -344,8 +371,12 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def append_log(self, text: str):
-        """Append text to the log widget."""
+        """Append text to the log widget and scroll to bottom."""
         self.text_logs.append(text)
+        self.text_logs.ensureCursorVisible()
+        # Also scroll to bottom
+        scrollbar = self.text_logs.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def load_settings_to_ui(self):
         """Load values from ConfigManager to UI fields."""
@@ -378,9 +409,9 @@ class MainWindow(QMainWindow):
             self.input_embed_provider.setCurrentText(emb_prov)
             
             if emb_prov.lower() == "openrouter":
-                self.input_embed_model.setCurrentText(data.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b"))
+                self.input_embed_model.setCurrentText(data.get("openrouter_embedding_model", "openai/text-embedding-3-small"))
             else:
-                self.input_embed_model.setCurrentText(data.get("ollama_embedding_model", "nomic-embed-text"))
+                self.input_embed_model.setCurrentText(data.get("ollama_embedding_model", "qwen3-embedding:latest"))
 
             self.input_temp.setValue(data.get("temperature", 0.7))
             self.input_max_token.setValue(data.get("max_tokens", 2048))
@@ -445,7 +476,7 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
              QMessageBox.critical(self, "Erro ao buscar modelos", f"Erro: {e}")
-             self.text_logs.append(f">> Falha ao buscar modelos: {e}")
+             self.append_log(f">> Falha ao buscar modelos: {e}")
         finally:
             self.input_model_name.blockSignals(False)
             self.input_embed_model.blockSignals(False)
@@ -473,7 +504,7 @@ class MainWindow(QMainWindow):
         
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
-        self.text_logs.append(">> Sinal de Início do Bot Enviado.")
+        self.append_log(">> [SINAL] Operação iniciada: Aguardando conexão do Telegram...")
 
     def stop_bot(self):
         """Stop the bot."""
@@ -483,7 +514,7 @@ class MainWindow(QMainWindow):
             
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
-        self.text_logs.append(">> Sinal de Parada do Bot Enviado.")
+        self.append_log(">> [SINAL] Operação encerrada: O Bot foi parado.")
 
     # --- Knowledge Base Logic ---
 
@@ -514,17 +545,27 @@ class MainWindow(QMainWindow):
             
         self.progress_bar.setValue(10)
         self.btn_ingest.setEnabled(False)
-        self.text_logs.append(f">> Iniciando ingestão de {fname}...")
+        self.append_log(f">> [PROCESSO] Iniciando ingestão de '{os.path.basename(fname)}'...")
         
-        chroma_dir = self.config_manager.get("chroma_dir", "") or ""
-        model_name = self.config_manager.get("embedding_model", "nomic-embed-text")
-        
+        chroma_dir = self.input_chroma_dir.text() or self.config_manager.get("chroma_dir", "") or ""
+        provider = self.input_embed_provider.currentText().lower()
+        if provider == "openrouter":
+            model_name = self.input_embed_model.currentText() or self.config_manager.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b")
+        else:
+            model_name = self.input_embed_model.currentText() or self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
+            
+        api_key = self.input_openrouter_key.text() or self.config_manager.get("openrouter_key", "")
+        ollama_url = self.input_ollama_url.text() or self.config_manager.get("ollama_url", "http://127.0.0.1:11434")
+            
         import json, subprocess
         worker_data = json.dumps({
             "action": "ingest",
             "file_path": fname,
             "chroma_dir": chroma_dir,
-            "model_name": model_name
+            "model_name": model_name,
+            "embedding_provider": provider,
+            "api_key": api_key,
+            "ollama_url": ollama_url
         })
         worker_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingest_worker.py")
         
@@ -566,14 +607,26 @@ class MainWindow(QMainWindow):
 
     def clear_db(self):
         """Clear the vector database."""
-        chroma_dir = self.config_manager.get("chroma_dir", "") or ""
-        model_name = self.config_manager.get("embedding_model", "nomic-embed-text")
+        chroma_dir = self.input_chroma_dir.text() or self.config_manager.get("chroma_dir", "") or ""
+        provider = self.input_embed_provider.currentText().lower()
+        if provider == "openrouter":
+            model_name = self.input_embed_model.currentText() or self.config_manager.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b")
+        else:
+            model_name = self.input_embed_model.currentText() or self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
+            
+        api_key = self.input_openrouter_key.text() or self.config_manager.get("openrouter_key", "")
+        ollama_url = self.input_ollama_url.text() or self.config_manager.get("ollama_url", "http://127.0.0.1:11434")
+        
+        self.append_log(">> [PROCESSO] Iniciando Limpeza Profunda do Banco de Dados...")
         
         import json, subprocess
         worker_data = json.dumps({
             "action": "clear",
             "chroma_dir": chroma_dir,
-            "model_name": model_name
+            "model_name": model_name,
+            "embedding_provider": provider,
+            "api_key": api_key,
+            "ollama_url": ollama_url
         })
         worker_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingest_worker.py")
         
@@ -600,7 +653,7 @@ class MainWindow(QMainWindow):
             return await loop.run_in_executor(None, sync_clear)
         
         future = self.async_worker.submit(do_clear())
-        self._monitor_future(future, lambda res: [self.text_logs.append(f">> {res}"), self.refresh_knowledge_list()])
+        self._monitor_future(future, lambda res: [self.append_log(f">> {res}"), self.refresh_knowledge_list()])
 
     def _monitor_future(self, future, callback):
         """Helper to check future completion."""
@@ -616,8 +669,8 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     import traceback
                     error_details = traceback.format_exception(type(e), e, e.__traceback__)
-                    self.text_logs.append(f">> Tarefa Falhou: {e}")
-                    self.text_logs.append(f">> Detalhes: {''.join(error_details[-3:])}")
+                    self.append_log(f">> Tarefa Falhou: {e}")
+                    self.append_log(f">> Detalhes: {''.join(error_details[-3:])}")
                     self.progress_bar.setValue(0)
                     self.btn_ingest.setEnabled(True)
         
@@ -629,7 +682,7 @@ class MainWindow(QMainWindow):
         chunks = result.get('chunks_count', 0)
         filename = result.get('filename', 'arquivo')
         msg = f">> Sucesso: {chunks} fragmentos ingeridos de '{filename}'."
-        self.text_logs.append(msg)
+        self.append_log(msg)
         QMessageBox.information(self, "Ingestão Concluída", msg)
         self.btn_ingest.setEnabled(True)
         self.refresh_knowledge_list()
@@ -688,7 +741,9 @@ class MainWindow(QMainWindow):
                 # Delete button
                 btn_del = QPushButton("Excluir")
                 btn_del.setStyleSheet("background-color: #ff5555; color: white;")
-                btn_del.clicked.connect(lambda chk=False, f=filename: self.delete_knowledge_file(f))
+                
+                # Fix closure bug with default argument f=filename
+                btn_del.clicked.connect(lambda checked, f=filename: self.delete_knowledge_file(f))
                 self.table_knowledge.setCellWidget(row, 1, btn_del)
 
         future = self.async_worker.submit(do_list())
@@ -746,7 +801,7 @@ class MainWindow(QMainWindow):
             
         def on_deleted(res):
             if res.get("ok"):
-                self.text_logs.append(f">> Arquivo '{filename}' excluído com sucesso.")
+                self.append_log(f">> Arquivo '{filename}' excluído com sucesso.")
                 self.refresh_knowledge_list()
             else:
                 QMessageBox.warning(self, "Erro", f"Falha ao excluir: {res.get('error')}")

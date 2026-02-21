@@ -18,7 +18,21 @@ echo -e "${NC}"
 # 1. Atualizar repositórios e instalar dependências do sistema
 echo -e "📦 1. Instalando dependências do sistema..."
 sudo apt update
-sudo apt install -y python3-pip python3-venv python3-dev libsqlite3-dev build-essential
+sudo apt install -y python3-pip python3-venv python3-dev libsqlite3-dev build-essential curl
+
+# 1.5 Instalar Ollama e Modelo de Embedding Local
+echo -e "🧠 1.5 Instalando Ollama e Modelo de Embedding..."
+if command -v ollama &> /dev/null; then
+    echo "Ollama já instalado. Pulando instalação..."
+else
+    curl -fsSL https://ollama.com/install.sh | sh
+    # Aguardar o serviço iniciar
+    sleep 5
+fi
+
+echo "Baixando modelos de busca local (Nomic e Qwen3)..."
+ollama pull nomic-embed-text
+ollama pull qwen3-embedding:latest
 
 # 2. Criar ambiente virtual
 echo -e "🐍 2. Criando ambiente virtual (venv)..."
@@ -85,6 +99,6 @@ echo ""
 echo "Notas Importantes:"
 echo "1. Certifique-se de que o seu 'config.json' tem o Token do Telegram e a Key do OpenRouter."
 echo "2. O bot rodará em modo CLI (texto) para economizar recursos."
-echo "3. Se encontrar erros com o SQLite, o 'pysqlite3-binary' já foi incluído para corrigir."
+echo "3. O Ollama foi instalado para busca local (RAG) com 'nomic-embed-text' e 'qwen3-embedding'."
 echo "4. O bot iniciará automaticamente quando o Raspberry Pi ligar."
 echo ""
