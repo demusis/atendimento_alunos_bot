@@ -1,110 +1,125 @@
-# Bot de Atendimento Acadêmico com IA (RAG)
+# 🤖 Bot de Atendimento Acadêmico com IA (RAG)
 
-Este projeto é um assistente inteligente para atendimento de alunos via Telegram. Ele utiliza **RAG (Retrieval-Augmented Generation)** para responder perguntas com base em documentos PDF/TXT fornecidos (ementas, horários, calendários) e interage através de uma interface local amigável.
-
-![Interface Gráfica](https://via.placeholder.com/800x400.png?text=Interface+do+Sistema)
-
-## 🚀 Funcionalidades Principais
-
-1.  **Respostas Contextuais (RAG)**: O bot lê seus documentos e responde apenas com base neles.
-2.  **Contexto Temporal Inteligente**: Sabe que dia é hoje para responder perguntas como "Tem aula hoje?".
-3.  **Suporte Híbrido de IA**:
-    *   **Local (Ollama)**: Totalmente gratuito e privado, rodando no seu PC.
-    *   **Nuvem (OpenRouter)**: Opcional, para usar modelos como GPT-4 ou Claude se desejar maior precisão.
-4.  **Botões Interativos**: Menu visual no Telegram (/start) para facilitar a navegação.
-5.  **Modo Administrador**:
-    *   **Ingestão Remota**: Adicione PDFs arrastando-os para o chat do Telegram.
-    *   **Resumo IA**: Gere relatórios automáticos sobre o que os alunos estão perguntando.
+Este projeto é um assistente inteligente projetado para o atendimento de alunos via Telegram. Ele utiliza a técnica de **RAG (Retrieval-Augmented Generation)** para responder perguntas baseando-se em documentos reais (Cronogramas, Horários, Ementas) e pode ser executado tanto em computadores pessoais quanto em servidores de baixo custo como o **Raspberry Pi 4**.
 
 ---
 
-## 🛠️ Instalação e Configuração
+## 🌟 Funcionalidades Principais
+
+*   **Busca Semântica (RAG)**: Responde dúvidas acadêmicas com base exclusiva no conteúdo dos seus documentos.
+*   **Menu de Acesso Rápido**: Botões interativos para "Horário", "Cronograma" e "Materiais".
+*   **Gestão de Arquivos**: Envio direto de documentos PDF/DOCX/JPG através de pastas físicas ou via chat (para admins).
+*   **Híbrido de IA**: Suporte para modelos locais (**Ollama**) ou em nuvem (**OpenRouter**).
+*   **Dual Mode**: Interface Gráfica (GUI) para iniciantes e Modo Linha de Comando (CLI) para servidores.
+
+---
+
+## 🖥️ Instalação no PC (Windows)
+
+A versão para Windows possui uma interface amigável para gerenciamento e visualização de logs em tempo real.
 
 ### Pré-requisitos
-- Python 3.10+
-- [Ollama](https://ollama.com) instalado (para modo local).
+- Python 3.10 ou superior instalado.
+- [Ollama](https://ollama.com) (opcional, se for usar IA local).
 
 ### Passo a Passo
-1.  **Clone/Baixe** este repositório.
-2.  **Instale as dependências**:
+1.  **Clone o repositório:**
+    ```bash
+    git clone https://github.com/demusis/atendimento_alunos_bot.git
+    cd atendimento_alunos_bot
+    ```
+2.  **Instale as dependências:**
     ```bash
     pip install -r requirements.txt
     ```
-    *Bibliotecas principais: `python-telegram-bot`, `langchain`, `chromadb`, `PyQt6`.*
-3.  **Execute a interface**:
+3.  **Configure o arquivo inicial:**
+    - Renomeie o arquivo `config_example.json` para `config.json`.
+    - Insira seu **Token do Telegram** e sua chave **OpenRouter** (se for o caso).
+4.  **Inicie o aplicativo:**
     ```bash
     python main.py
     ```
-
-### Na Interface
-1.  Vá na aba **Configuração**.
-2.  Insira seu **Token do Telegram** (crie um com o @BotFather).
-3.  Escolha o Provedor (Ollama ou OpenRouter).
-4.  **Salve** (o salvamento é automático).
-5.  Vá na aba **Terminal** e clique em **Iniciar Bot**.
+5.  **Na Interface:**
+    - Use a aba **Configuração** para ajustar modelos, temperatura e o parâmetro **K (Memória de Busca)**.
+    - Na aba **Terminal**, clique em **Iniciar Bot**.
 
 ---
 
-## 🔧 Configuração Avançada (Modo Admin)
+## 🍓 Instalação no Raspberry Pi 4 (Linux / Headless)
 
-Para usar comandos exclusivos de administrador, você precisa definir seu ID do Telegram.
+O bot foi otimizado para rodar em modo silencioso no Raspberry Pi 4, economizando memória e CPU.
 
-1.  Abra o arquivo `config.json` na pasta do projeto.
-2.  Localize a chave `"admin_id": ""`.
-3.  Insira seu ID numérico (ex: `"admin_id": "123456789"`).
-    *   *Dica: Mande uma mensagem para o @userinfobot no Telegram para descobrir seu ID.*
-4.  Reinicie o bot.
+### Pré-requisitos
+- **Raspberry Pi OS (64-bit)** recomendado.
+- Python 3.10+.
 
-### Comandos de Admin
-| Comando | Descrição |
-| :--- | :--- |
-| `/admin_ingest` | Exibe instruções. Arraste um arquivo PDF/TXT para o chat para adicioná-lo à base. |
-| `/admin_summary` | Abre menu para gerar **Resumo via IA** das interações (24h, 7 dias, 30 dias). |
-| `/insight` | Pergunta livre para a IA analisar os logs. Ex: `/insight 7 O que falam do professor X?` |
+### Instalação Automatizada
+Para facilitar a instalação no RPi4, utilize o script de automação incluso:
+
+1.  **Dê permissão ao instalador:**
+    ```bash
+    chmod +x install_rp4.sh
+    ```
+2.  **Execute a instalação:**
+    ```bash
+    ./install_rp4.sh
+    ```
+    *Este script criará o ambiente virtual (venv), instalará as dependências do sistema e do Python, e configurará a pasta do banco de dados automaticamente.*
+
+3.  **Configuração:**
+    - Edite o arquivo `config.json` que foi criado automaticamente na pasta raiz com suas credenciais do Telegram e OpenRouter.
+
+4.  **Inicie o bot:**
+    ```bash
+    ./start_rp4.sh
+    ```
 
 ---
 
-## 🎨 Personalização dos Botões
+## 🕹️ Modos de Operação
 
-Os botões do menu `/start` são configurados no código para máxima flexibilidade.
+### Modo GUI (Interface Gráfica)
+Basta rodar `python main.py`. Ideal para configuração inicial e monitoramento visual.
 
-**Arquivo**: `telegram_controller.py`
-**Método**: `_cmd_start`
-
-```python
-keyboard = [
-    [
-        InlineKeyboardButton("NOVO BOTÃO", callback_data="btn_novo"),
-        # ...
-    ]
-]
+### Modo CLI (Texto / Terminal)
+Ideal para rodar 24h por dia em servidores. Se o sistema não detectar um monitor, ele entrará neste modo automaticamente, ou você pode forçar via:
+```bash
+python main.py --cli
 ```
-
-Para alterar a **resposta** do botão, edite o método `_handle_button` no mesmo arquivo:
-
-```python
-elif query.data == "btn_novo":
-    await query.edit_message_text(text="Sua resposta personalizada aqui.")
-```
+*   **Encerrar com segurança**: Pressione `CTRL+C` no terminal. O bot salvará os logs e fechará as sessões antes de sair.
 
 ---
 
-## 📊 Analytics e Logs
+## 📁 Estrutura da Pasta `arquivos`
 
-O sistema salva um histórico anonimizado de interações em `history.jsonl`.
--   **Formato**: JSON Lines.
--   **Dados**: Timestamp, Hash do Usuário, Pergunta, Tamanho da Resposta.
--   **Privacidade**: O ID do usuário é criptografado (Hash SHA-256).
+O bot gerencia os botões do menu principal baseando-se nos nomes dos arquivos dentro desta pasta:
 
-O comando `/admin_summary` lê este arquivo para gerar insights sobre as dúvidas mais comuns dos alunos.
+*   **Botão Horário**: Envia todos os arquivos iniciados com `horario` (ex: `horario_2024.pdf`).
+*   **Botão Cronograma**: Envia todos os arquivos iniciados com `cronograma` (ex: `cronograma_algoritmos.docx`).
+*   **Botão Materiais**: Exibe o texto personalizado contido no arquivo `materiais.txt`.
 
 ---
 
-## 🧠 Arquitetura
+## 🛠️ Comandos de Administrador
 
-O sistema segue uma arquitetura modular limpa:
--   `main_window.py`: Interface Gráfica (PyQt6).
--   `telegram_controller.py`: Lógica do Bot e Comandos.
--   `rag_repository.py`: Gerenciamento do Banco Vetorial (ChromaDB).
--   `ollama_client.py` / `openrouter_client.py`: Adaptadores de IA.
--   `analytics_manager.py`: Gestão de logs e métricas.
+Se o seu ID do Telegram estiver configurado no campo `admin_id` do `config.json`, você terá acesso a:
+
+*   `/status`: Relatório completo da saúde do sistema, latência da IA e estatísticas do banco de dados.
+*   `/aviso [mensagem]`: Envia um broadcast para todos os usuários cadastrados.
+*   `/ia [modelo]`: Troca o modelo de IA em tempo real via chat.
+*   `/prompt [texto]`: Altera as instruções de comportamento da IA sem reiniciar o bot.
+*   **Upload de Documentos**: Basta arrastar um arquivo para o chat com o bot e ele será ingerido automaticamente na base RAG.
+
+---
+
+## ⚙️ Configurações Importantes (`config.json`)
+
+*   `rag_k`: Define quantos trechos de documentos a IA lerá antes de responder. (Padrão: 8).
+*   `chroma_dir`: Caminho absoluto para a pasta onde o banco vetorial será salvo.
+*   `ai_provider`: Define se o bot usa `ollama` ou `openrouter`.
+
+---
+
+## 📊 Analytics e Privacidade
+
+As interações são salvas em `history.jsonl`. O sistema anonimiza os IDs dos usuários via Hash SHA-256 para garantir a privacidade dos alunos, permitindo apenas a análise estatística das dúvidas enviadas.
