@@ -971,7 +971,17 @@ class TelegramBotController:
         # Feature 3: Rate Limiting
         if not self._check_rate_limit(user_id):
             await update.message.reply_text(
-                "⏳ Você atingiu o limite de mensagens por minuto. Aguarde um momento antes de enviar outra."
+                "⏳ <b>Limite de mensagens atingido!</b>\n\n"
+                "Para garantir que todos os alunos sejam atendidos com qualidade, "
+                "por favor aguarde um minutinho antes de enviar novas dúvidas.\n\n"
+                "💡 <i>Dica: Tente ser mais específico em sua pergunta para obter uma "
+                "resposta mais precisa de uma só vez.</i>",
+                parse_mode="HTML"
+            )
+            # Send menu buttons even on rate limit
+            await update.message.reply_text(
+                "Enquanto aguarda, você pode navegar pelas opções:",
+                reply_markup=self._get_menu_keyboard()
             )
             return
         
