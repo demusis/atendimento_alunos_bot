@@ -192,6 +192,7 @@ class TelegramBotController:
             )
             
         await update.message.reply_text(msg, parse_mode="HTML")
+        await update.message.reply_text("Selecione uma opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
 
     async def _cmd_list_documents(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /listar command - list documents in the vector store."""
@@ -1117,8 +1118,15 @@ class TelegramBotController:
             if response_text:
                 # Clean markdown since we are sending as plain text
                 response_text = self._clean_markdown(response_text)
-                await update.message.reply_text(response_text) # type: ignore
-                await update.message.reply_text("Selecione uma opção ou digite outra dúvida:", reply_markup=self._get_menu_keyboard()) # type: ignore
+                
+                # Split long messages (Telegram limit is 4096 chars)
+                MAX_LEN = 4000
+                if len(response_text) > MAX_LEN:
+                    parts = [response_text[i:i+MAX_LEN] for i in range(0, len(response_text), MAX_LEN)]
+                    for part in parts:
+                        await update.message.reply_text(part) # type: ignore
+                else:
+                    await update.message.reply_text(response_text) # type: ignore
                 
                 # Feature 1: Save to chat history
                 self._add_to_history(user_id, user_query, response_text)
@@ -1144,3 +1152,9 @@ class TelegramBotController:
             await update.message.reply_text("Ocorreu um erro ao processar sua solicitação.") # type: ignore
             # Feature 5: Notify admin about critical errors
             await self._notify_admin(f"Erro ao gerar resposta para o usuário {user_id}:\n{str(e)}")
+        
+        # ALWAYS show menu buttons at the end, regardless of success or failure
+        try:
+            await update.message.reply_text("Selecione uma opção ou digite outra dúvida:", reply_markup=self._get_menu_keyboard()) # type: ignore
+        except Exception:
+            pass  # Last-resort: don't let button sending crash the handler
