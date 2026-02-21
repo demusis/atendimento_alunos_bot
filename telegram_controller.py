@@ -569,16 +569,19 @@ class TelegramBotController:
         return "\n".join(lines)
 
     async def _notify_admin(self, message: str) -> None:
-        """Send an error notification to the admin via Telegram."""
-        try:
-            admin_id = self.config_manager.get("admin_id", "")
-            if admin_id and self.application:
+        """Send an error notification to all admins via Telegram."""
+        admin_ids_raw = self.config_manager.get("admin_id", "")
+        if not admin_ids_raw or not self.application:
+            return
+        admin_list = [aid.strip() for aid in str(admin_ids_raw).split(",") if aid.strip()]
+        for aid in admin_list:
+            try:
                 await self.application.bot.send_message(
-                    chat_id=int(admin_id),
+                    chat_id=int(aid),
                     text=f"⚠️ ALERTA DO BOT:\n\n{message}"
                 )
-        except Exception as e:
-            logger.error(f"Falha ao notificar admin: {e}")
+            except Exception as e:
+                logger.error(f"Falha ao notificar admin {aid}: {e}")
 
     async def _cmd_faq(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /faq command."""
@@ -892,12 +895,13 @@ class TelegramBotController:
             await query.edit_message_text(text="❌ Erro ao gerar resumo verificador logs do servidor.")
 
     def _is_admin(self, update: Update) -> bool:
-        """Check if user is admin."""
-        admin_id = self.config_manager.get("admin_id")
-        if not admin_id:
+        """Check if user is admin. Supports multiple IDs separated by comma."""
+        admin_ids_raw = self.config_manager.get("admin_id", "")
+        if not admin_ids_raw:
             return False
         user_id = str(update.effective_user.id)
-        return user_id == str(admin_id)
+        admin_list = [aid.strip() for aid in str(admin_ids_raw).split(",") if aid.strip()]
+        return user_id in admin_list
 
     async def _handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle document uploads (Admin Only)."""

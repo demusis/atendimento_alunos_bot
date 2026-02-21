@@ -140,7 +140,7 @@ class MainWindow(QMainWindow):
         self.input_telegram_token.setEchoMode(QLineEdit.EchoMode.Password)
         
         self.input_admin_id = QLineEdit()
-        self.input_admin_id.setPlaceholderText("Seu ID do Telegram (ver /meuid no bot)")
+        self.input_admin_id.setPlaceholderText("IDs separados por vírgula (ex: 123456,789012)")
         
         # Ollama Widgets
         self.input_ollama_url = QLineEdit()
