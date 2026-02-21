@@ -1,4 +1,14 @@
 import os
+import sys
+
+# SQLite patch for Linux (needed for ChromaDB on some Raspberry Pi versions)
+if sys.platform == "linux":
+    try:
+        import pysqlite3 as sqlite3
+        sys.modules["sqlite3"] = sqlite3
+    except ImportError:
+        pass
+
 import shutil
 from typing import List, Optional, Dict, Any
 from langchain_community.document_loaders import PyPDFLoader, CSVLoader, TextLoader, Docx2txtLoader

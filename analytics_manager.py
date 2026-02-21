@@ -10,7 +10,12 @@ class AnalyticsManager:
     Anonymizes user IDs using SHA-256.
     """
     def __init__(self, log_file: str = "history.jsonl"):
-        self.log_file = log_file
+        # If the path is relative, make it absolute based on the script's location
+        if not os.path.isabs(log_file):
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            self.log_file = os.path.join(base_dir, log_file)
+        else:
+            self.log_file = log_file
 
     def _anonymize_user(self, user_id: int) -> str:
         """Hash user ID for privacy."""
