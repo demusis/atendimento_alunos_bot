@@ -10,7 +10,8 @@ class ConfigurationManager:
     """
     _instance: Optional['ConfigurationManager'] = None
     _lock: threading.Lock = threading.Lock()
-    _config_file: str = "config.json"
+    _base_dir: str = os.path.dirname(os.path.abspath(__file__))
+    _config_file: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
     def __new__(cls) -> 'ConfigurationManager':
         """

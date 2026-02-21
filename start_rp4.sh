@@ -5,6 +5,9 @@ echo "=========================================="
 echo "   Iniciando Assistente Acadêmico (CLI)   "
 echo "=========================================="
 
+# Muda para o diretório onde o script está localizado
+cd "$(dirname "$0")"
+
 # Ativa o ambiente virtual automaticamente
 if [ -d "venv" ]; then
     source venv/bin/activate
