@@ -744,7 +744,7 @@ class TelegramBotController:
                       "E-mail: carlo.demusis@gmail.com",
                  parse_mode="HTML"
              ) # type: ignore
-              await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
+             await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
         
         # --- Admin Buttons (Summary) ---
         elif data.startswith("btn_summary_"):
