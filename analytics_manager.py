@@ -1,0 +1,90 @@
+import json
+import os
+import hashlib
+from datetime import datetime
+from typing import Optional
+
+class AnalyticsManager:
+    """
+    Manages logging of user interactions for analytics.
+    Anonymizes user IDs using SHA-256.
+    """
+    def __init__(self, log_file: str = "history.jsonl"):
+        self.log_file = log_file
+
+    def _anonymize_user(self, user_id: int) -> str:
+        """Hash user ID for privacy."""
+        return hashlib.sha256(str(user_id).encode()).hexdigest()[:16]
+
+    def log_interaction(self, user_id: int, question: str, answer: str, provider: str, full_name: str = "Unknown", username: str = ""):
+        """
+        Log a Q&A interaction with full user details.
+        """
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "user_id": user_id,
+            "full_name": full_name,
+            "username": username,
+            "question_length": len(question),
+            "answer_length": len(answer),
+            "provider": provider,
+            "question": question, 
+            "answer": answer
+        }
+        
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print(f"Failed to log interaction: {e}")
+    
+    def get_logs(self, days: int) -> str:
+        """
+        Retrieve logs from the last `days`.
+        Returns a formatted string for the LLM.
+        """
+        if not os.path.exists(self.log_file):
+            return "Nenhum histórico encontrado."
+            
+        relevant_logs = []
+        now = datetime.now()
+        
+        try:
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        ts = datetime.fromisoformat(entry["timestamp"])
+                        if (now - ts).days <= days:
+                            # Format for LLM reading (detailed)
+                            user_str = f"{entry.get('full_name', 'User')} (@{entry.get('username', '')})"
+                            relevant_logs.append(f"- [{entry['timestamp'][:16]}] [{user_str}] Q: {entry.get('question', '')}")
+                    except:
+                        continue
+            
+            return "\n".join(relevant_logs) if relevant_logs else "Nenhuma interação no período."
+        except Exception as e:
+            return f"Erro ao ler logs: {e}"
+
+    def get_unique_users(self) -> list[int]:
+        """
+        Get a list of all unique Telegram user IDs from the history.
+        """
+        if not os.path.exists(self.log_file):
+            return []
+            
+        unique_users = set()
+        try:
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        u_id = entry.get("user_id")
+                        if u_id:
+                            unique_users.add(int(u_id))
+                    except:
+                        continue
+            return list(unique_users)
+        except Exception as e:
+            print(f"Error getting unique users: {e}")
+            return []
