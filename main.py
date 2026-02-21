@@ -14,9 +14,9 @@ logging.basicConfig(
     ]
 )
 
-# Suppress verbose httpx logs to avoid exposing tokens in the UI
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("telegram").setLevel(logging.INFO)
+# Enable verbose logs as requested by user
+logging.getLogger("httpx").setLevel(logging.INFO)
+logging.getLogger("telegram").setLevel(logging.DEBUG)
 
 async def run_cli():
     """Run the bot in CLI mode."""

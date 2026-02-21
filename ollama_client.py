@@ -59,6 +59,10 @@ class OllamaAdapter:
         """
         url = f"{self.base_url}/api/generate"
         
+        # Safety: Strip OpenRouter prefixes if accidentally passed to Ollama
+        if "/" in model:
+            model = model.split("/")[-1]
+            
         # Disable Qwen3 "thinking" mode to speed up responses
         if "qwen3" in model.lower():
             prompt = prompt + " /no_think"

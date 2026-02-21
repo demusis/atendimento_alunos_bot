@@ -43,6 +43,10 @@ class TelegramBotController:
         
         # Feature 3: Rate limiting
         self._user_message_times: Dict[int, list] = {}  # user_id -> list of timestamps
+        
+        # Feature: Scheduled Reminders
+        self._reminders_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reminders.json")
+        self._reminders: List[Dict[str, Any]] = self._load_reminders()
 
     @staticmethod
     def _clean_markdown(text: str) -> str:
@@ -166,6 +170,13 @@ class TelegramBotController:
         self.application.add_handler(CommandHandler("conhecimento", self._cmd_add_knowledge_text))
         self.application.add_handler(CommandHandler("meuid", self._cmd_my_id))
         self.application.add_handler(CommandHandler("estatisticas", self._cmd_admin_summary))
+        self.application.add_handler(CommandHandler("lembrete", self._cmd_add_reminder))
+        # Admin System Management
+        self.application.add_handler(CommandHandler("reiniciar_bot", self._cmd_restart_bot))
+        self.application.add_handler(CommandHandler("monitor_cpu", self._cmd_monitor_cpu))
+        self.application.add_handler(CommandHandler("speedtest", self._cmd_speedtest))
+        self.application.add_handler(CommandHandler("ping_ia", self._cmd_ping_ia))
+        self.application.add_handler(CommandHandler("atualizar", self._cmd_update))
         # Admin commands
         self.application.add_handler(CommandHandler("bd", self._cmd_admin_help))
         self.application.add_handler(CommandHandler("limpar", self._cmd_clear_database))
@@ -182,6 +193,10 @@ class TelegramBotController:
         
         # Initialize and Start
         await self.application.initialize()
+        
+        # Load Scheduled Jobs
+        self._setup_reminder_jobs()
+        
         await self.application.start()
         await self.application.updater.start_polling() # type: ignore
         
@@ -221,34 +236,54 @@ class TelegramBotController:
         
         if is_admin:
             msg = (
-                "<b>Comandos de Administrador:</b>\n\n"
-                "/listar - Lista arquivos na base de conhecimento\n"
-                "/remover <code>[arquivo]</code> - Remove um arquivo da base\n"
-                "/ia <code>[modelo]</code> - Lista ou troca o modelo de IA\n"
-                "/embedding <code>[modelo]</code> - Lista ou troca o modelo de Embedding\n"
-                "/limpar - Apaga toda a base de dados\n"
-                "/bd - Ajuda para ingestão de arquivos\n"
-                "/status - Status do sistema e da base\n"
-                "/aviso <code>[mensagem]</code> - Envia aviso para todos os alunos\n"
-                "/conhecimento <code>[texto]</code> - Adiciona texto direto à base\n"
-                "/prompt <code>[mensagem]</code> - Vê ou altera o System Prompt\n"
-                "/estatisticas - Relatório de interações\n\n"
-                "<b>Comandos Gerais:</b>\n"
-                "/inicio - Menu principal\n"
-                "/meuid - Ver seu ID do Telegram\n"
-                "/ajuda - Mostra esta lista"
+                "🛠️ <b>Painel de Controle do Administrador</b>\n\n"
+                
+                "🧠 <b>IA & Conhecimento:</b>\n"
+                "• /ia <code>[modelo]</code> - Lista ou troca modelo de chat\n"
+                "• /embedding <code>[modelo]</code> - Lista/Troca modelo de busca\n"
+                "• /conhecimento <code>[texto]</code> - Ingestão direta de texto\n"
+                "• /listar - Lista documentos na base vetorial\n"
+                "• /remover <code>[nome]</code> - Remove arquivo da base\n"
+                "• /limpar - Reseta totalmente o banco de dados\n"
+                "• /prompt <code>[texto]</code> - Vê/Edita instruções da IA\n"
+                "• /bd - Guia rápido para ingestão de arquivos\n\n"
+                
+                "📢 <b>Comunicação & Avisos:</b>\n"
+                "• /aviso <code>[texto]</code> - Mensagem para TODOS os alunos\n"
+                "• /lembrete <code>DD/MM HH:MM Mensagem</code> - Agendar envio\n"
+                "• /faq - Mostra as perguntas frequentes atuais\n\n"
+                
+                "🖥️ <b>Sistema & Hardware:</b>\n"
+                "• /status - Relatório completo de saúde e hardware\n"
+                "• /monitor_cpu - Uso de CPU e processos ativos\n"
+                "• /speedtest - Teste de internet no servidor\n"
+                "• /ping_ia - Latência (Ollama vs OpenRouter)\n"
+                "• /atualizar - Git Pull + Update dependencies\n"
+                "• /reiniciar_bot - Reinicia o processo do bot\n\n"
+                
+                "📊 <b>Análise & Identidade:</b>\n"
+                "• /estatisticas - Dashboard de uso geral\n"
+                "• /admin_summary - Resumo por IA das dúvidas dos alunos\n"
+                "• /insight - Análise profunda de tendências\n"
+                "• /meuid - Ver seu ID do Telegram\n\n"
+                
+                "🧭 <b>Geral:</b>\n"
+                "• /inicio - Retorna ao menu principal\n"
+                "• /ajuda - Exibe este guia detalhado"
             )
         else:
             msg = (
-                "<b>Comandos disponíveis:</b>\n\n"
-                "/inicio - Menu principal interativo\n"
-                "/meuid - Ver seu ID do Telegram\n"
-                "/ajuda - Mostra esta lista\n\n"
-                "Você também pode enviar sua dúvida diretamente por texto a qualquer momento."
+                "🎓 <b>Central de Ajuda - Aluno</b>\n\n"
+                "Olá! Você pode interagir comigo usando os botões do menu ou os comandos abaixo:\n\n"
+                "• /inicio - Abre o menu principal interativo\n"
+                "• /ajuda - Mostra esta lista de ajuda\n"
+                "• /meuid - Informa seu número de identificação\n\n"
+                "💡 <b>Dica:</b> Você pode enviar sua dúvida diretamente por texto (ou até documentos/fotos se o professor permitir) e eu tentarei responder usando o material de aula!"
             )
             
         await update.message.reply_text(msg, parse_mode="HTML")
-        await update.message.reply_text("Selecione uma opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
+        if not is_admin: # For students, usually nice to remind of the menu
+            await update.message.reply_text("Como posso te ajudar agora?", reply_markup=self._get_menu_keyboard())
 
     async def _cmd_list_documents(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /listar command - list documents in the vector store."""
@@ -474,14 +509,67 @@ class TelegramBotController:
             # 2. Get DB Stats
             db_stats = await self._run_chroma_worker({"action": "stats"})
             
+            # 3. System Metrics
+            import socket
+            import platform
+            hostname = platform.node()
+            
+            # Get Local IP
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+            except:
+                local_ip = "127.0.0.1"
+
+            # Hardware usage (Try psutil)
+            mem_info = "N/A"
+            disk_info = "N/A"
+            gpu_info = "N/A (Carga CPU)"
+            
+            try:
+                import psutil
+                # RAM
+                mem = psutil.virtual_memory()
+                mem_info = f"{mem.percent}% ({mem.used // (1024**2)}MB / {mem.total // (1024**2)}MB)"
+                
+                # Disk
+                disk = psutil.disk_usage('/')
+                disk_info = f"{disk.percent}% ({disk.free // (1024**3)}GB livres de {disk.total // (1024**3)}GB)"
+                
+                # GPU (Optional)
+                try:
+                    import GPUtil
+                    gpus = GPUtil.getGPUs()
+                    if gpus:
+                        gpu = gpus[0]
+                        gpu_info = f"{gpu.load*100:.1f}% ({gpu.memoryUsed}MB / {gpu.memoryTotal}MB)"
+                except:
+                    pass
+            except:
+                pass
+
             current_model = self.config_manager.get("ollama_model", "N/A")
             provider = self.config_manager.get("ai_provider", "ollama")
             
+            # Embedding Info
+            emb_provider = self.config_manager.get("embedding_provider", "ollama")
+            if emb_provider == "openrouter":
+                emb_model = self.config_manager.get("openrouter_embedding_model", "openai/text-embedding-3-small")
+            else:
+                emb_model = self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
+
             import html
             report = (
                 "📊 <b>Status do Sistema</b>\n\n"
-                f"🤖 <b>IA Provider:</b> <code>{provider.upper()}</code>\n"
-                f"🧠 <b>Modelo Ativo:</b> <code>{html.escape(str(current_model))}</code>\n"
+                f"🖥️ <b>Host:</b> <code>{html.escape(hostname)}</code>\n"
+                f"🌐 <b>IP Local:</b> <code>{local_ip}</code>\n"
+                f"📈 <b>Memória RAM:</b> <code>{mem_info}</code>\n"
+                f"💽 <b>Disco:</b> <code>{disk_info}</code>\n"
+                f"🎮 <b>GPU:</b> <code>{gpu_info}</code>\n\n"
+                f"🤖 <b>AI Chat:</b> <code>{provider.upper()}</code> ({html.escape(str(current_model))})\n"
+                f"🧬 <b>Embeddings:</b> <code>{emb_provider.upper()}</code> ({html.escape(str(emb_model))})\n"
                 f"📡 <b>Ollama:</b> {ollama_status} ({latency:.0f}ms)\n\n"
                 "📂 <b>Base de Conhecimento:</b>\n"
                 f"- Arquivos: <code>{db_stats.get('file_count', 0)}</code> unidades\n"
@@ -491,6 +579,230 @@ class TelegramBotController:
         except Exception as e:
             logger.error(f"Erro no status: {e}")
             await status_msg.edit_text(f"❌ Erro ao obter status: {e}")
+
+    async def _cmd_restart_bot(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/reiniciar_bot - Restart the bot process."""
+        if not update.message: return
+        if not self._is_admin(update): return
+        await update.message.reply_text("🔄 Reiniciando o bot... Voltarei em alguns segundos.")
+        import os, sys
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    async def _cmd_monitor_cpu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/monitor_cpu - Show CPU usage and top processes."""
+        if not update.message: return
+        if not self._is_admin(update): return
+        import psutil
+        cpu_usage = psutil.cpu_percent(interval=1)
+        procs = []
+        for p in psutil.process_iter(['pid', 'name', 'cpu_percent']):
+            try:
+                procs.append(p.info)
+            except: pass
+        procs = sorted(procs, key=lambda x: x['cpu_percent'], reverse=True)[:5]
+        
+        import html
+        plist = "\n".join([f"<code>{p['pid']}</code>: {html.escape(str(p['name']))} ({p['cpu_percent']}%)" for p in procs])
+        await update.message.reply_text(f"📊 <b>Uso de CPU:</b> {cpu_usage}%\n\n<b>Top Processos:</b>\n{plist}", parse_mode="HTML")
+
+    async def _cmd_speedtest(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/speedtest - Perform internet speed test."""
+        if not update.message: return
+        if not self._is_admin(update): return
+        status_msg = await update.message.reply_text("🌐 Iniciando Speedtest... Isso pode levar 30 segundos.")
+        try:
+            import speedtest
+            st = speedtest.Speedtest()
+            st.get_best_server()
+            download = st.download() / 1_000_000
+            upload = st.upload() / 1_000_000
+            ping = st.results.ping
+            await status_msg.edit_text(
+                f"🚀 <b>Resultado Speedtest:</b>\n\n"
+                f"⬇️ Download: <code>{download:.2f} Mbps</code>\n"
+                f"⬆️ Upload: <code>{upload:.2f} Mbps</code>\n"
+                f"🏓 Ping: <code>{ping:.1f} ms</code>",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Erro no Speedtest: {e}")
+
+    async def _cmd_ping_ia(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/ping_ia - Check latency to AI providers."""
+        if not update.message: return
+        if not self._is_admin(update): return
+        import time, httpx
+        report = "🏓 <b>Latência da IA:</b>\n\n"
+        
+        # Ollama
+        ollama_url = self.config_manager.get("ollama_url", "http://127.0.0.1:11434")
+        try:
+            start_time = time.time()
+            async with httpx.AsyncClient() as client:
+                await client.get(f"{ollama_url}/api/tags", timeout=5)
+            lat = (time.time() - start_time) * 1000
+            report += f"🏠 <b>Ollama (Local):</b> <code>{lat:.0f}ms</code>\n"
+        except:
+            report += "🏠 <b>Ollama (Local):</b> ❌ Timeout/Erro\n"
+            
+        # OpenRouter
+        try:
+            start_time = time.time()
+            async with httpx.AsyncClient() as client:
+                await client.get("https://openrouter.ai/api/v1/models", timeout=5)
+            lat = (time.time() - start_time) * 1000
+            report += f"☁️ <b>OpenRouter (Cloud):</b> <code>{lat:.0f}ms</code>\n"
+        except:
+            report += "☁️ <b>OpenRouter (Cloud):</b> ❌ Timeout/Erro\n"
+            
+        await update.message.reply_text(report, parse_mode="HTML")
+
+    async def _cmd_update(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/atualizar - Git pull and restart."""
+        if not update.message: return
+        if not self._is_admin(update): return
+        status_msg = await update.message.reply_text("🔄 Iniciando atualização via Git...")
+        import subprocess, sys, os
+        try:
+            # 1. Git Pull
+            res = subprocess.run(["git", "pull"], capture_output=True, text=True)
+            if res.returncode != 0:
+                await status_msg.edit_text(f"❌ Erro no Git Pull:\n<code>{res.stderr}</code>", parse_mode="HTML")
+                return
+            
+            # 2. Pip Install
+            await status_msg.edit_text("📦 Git atualizado. Verificando dependências...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+            
+            await status_msg.edit_text("✅ Tudo pronto! Reiniciando processo...")
+            await asyncio.sleep(2)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        except Exception as e:
+            await status_msg.edit_text(f"❌ Erro na atualização: {e}")
+
+    # --- Reminder System ---
+
+    def _load_reminders(self) -> List[Dict[str, Any]]:
+        if os.path.exists(self._reminders_file):
+            try:
+                with open(self._reminders_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except: return []
+        return []
+
+    def _save_reminders(self):
+        with open(self._reminders_file, 'w', encoding='utf-8') as f:
+            json.dump(self._reminders, f, ensure_ascii=False, indent=4)
+
+    def _setup_reminder_jobs(self):
+        """Register all pending reminders to the Telegram JobQueue."""
+        if not self.application or not self.application.job_queue: return
+        
+        now = time.time()
+        for rem in self._reminders[:]:
+            if rem['timestamp'] > now:
+                self.application.job_queue.run_once(
+                    self._execute_reminder, 
+                    when=rem['timestamp'] - now,
+                    data=rem,
+                    name=rem['id']
+                )
+            else:
+                # Remove expired
+                self._reminders.remove(rem)
+        self._save_reminders()
+
+    async def _execute_reminder(self, context: ContextTypes.DEFAULT_TYPE):
+        """Triggered by JobQueue to send the broadcast."""
+        job = context.job
+        if not job or not job.data: return
+        rem = job.data
+        
+        # Send broadcast
+        user_ids = self.analytics.get_unique_users()
+        success = 0
+        for uid in user_ids:
+            try:
+                await context.bot.send_message(
+                    chat_id=int(uid), 
+                    text=f"⏰ <b>Lembrete Agendado:</b>\n\n{rem['message']}",
+                    parse_mode="HTML"
+                )
+                success += 1
+            except: pass
+            await asyncio.sleep(0.05)
+            
+        logger.info(f"Lembrete '{rem['id']}' enviado para {success} usuários.")
+        
+        # Remove from list
+        self._reminders = [r for r in self._reminders if r['id'] != rem['id']]
+        self._save_reminders()
+
+    async def _cmd_add_reminder(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/lembrete DD/MM HH:MM Mensagem ou /lembrete DD/MM/AAAA HH:MM Mensagem"""
+        if not update.message or not self._is_admin(update): return
+        
+        args = context.args
+        if not args or len(args) < 3:
+            await update.message.reply_text(
+                "📝 <b>Uso do Lembrete:</b>\n\n"
+                "<code>/lembrete DD/MM HH:MM Sua Mensagem</code>\n"
+                "Ex: <code>/lembrete 25/02 19:00 Prova de Algoritmos</code>",
+                parse_mode="HTML"
+            )
+            return
+
+        date_str = args[0]
+        time_str = args[1]
+        message = " ".join(args[2:])
+        
+        import datetime
+        now = datetime.datetime.now()
+        
+        try:
+            # Parse Date logic
+            if len(date_str.split('/')) == 2:
+                # DD/MM - assumes current year
+                target_dt = datetime.datetime.strptime(f"{date_str}/{now.year} {time_str}", "%d/%m/%Y %H:%M")
+            else:
+                # DD/MM/YYYY
+                target_dt = datetime.datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+            
+            target_ts = target_dt.timestamp()
+            
+            if target_ts <= now.timestamp():
+                await update.message.reply_text("❌ Erro: A data/hora deve estar no futuro.")
+                return
+                
+            rem_id = f"rem_{int(target_ts)}"
+            new_rem = {
+                "id": rem_id,
+                "timestamp": target_ts,
+                "date_human": target_dt.strftime("%d/%m/%Y %H:%M"),
+                "message": message
+            }
+            
+            # Save and schedule
+            self._reminders.append(new_rem)
+            self._save_reminders()
+            
+            if self.application and self.application.job_queue:
+                self.application.job_queue.run_once(
+                    self._execute_reminder,
+                    when=target_ts - now.timestamp(),
+                    data=new_rem,
+                    name=rem_id
+                )
+            
+            await update.message.reply_text(
+                f"✅ <b>Lembrete Agendado!</b>\n\n"
+                f"📅 Data: <code>{new_rem['date_human']}</code>\n"
+                f"💬 Mensagem: <i>{message}</i>",
+                parse_mode="HTML"
+            )
+            
+        except ValueError:
+            await update.message.reply_text("❌ Formato de data inválido. Use <code>DD/MM HH:MM</code>.", parse_mode="HTML")
 
     async def _cmd_aviso(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /aviso command - broadcast message to all users."""
@@ -1157,6 +1469,19 @@ class TelegramBotController:
                     return await self._cmd_clear_database(update, context)
                 elif cmd_part == "admin_summary":
                     return await self._cmd_admin_summary(update, context)
+                elif cmd_part == "reiniciar_bot":
+                    return await self._cmd_restart_bot(update, context)
+                elif cmd_part == "monitor_cpu":
+                    return await self._cmd_monitor_cpu(update, context)
+                elif cmd_part == "speedtest":
+                    return await self._cmd_speedtest(update, context)
+                elif cmd_part == "ping_ia":
+                    return await self._cmd_ping_ia(update, context)
+                elif cmd_part == "atualizar":
+                    return await self._cmd_update(update, context)
+                elif cmd_part == "lembrete":
+                    context.args = parts[1:] if len(parts) > 1 else []
+                    return await self._cmd_add_reminder(update, context)
         
         # Auto-show /start on first message of the day
         import datetime
@@ -1261,6 +1586,13 @@ class TelegramBotController:
             else:
                 # Default Ollama
                 model = self.config_manager.get("ollama_model", "llama3:latest")
+                
+                # Safety: If it's Ollama but looks like an OpenRouter model name (has a slash), strip the prefix
+                if "/" in model:
+                    old_model = model
+                    model = model.split("/")[-1]
+                    logger.warning(f"Nome do modelo Ollama parecia inválido ('{old_model}'). Corrigido para '{model}'")
+
                 logger.info(f"Iniciando geração com Ollama (Modelo: {model})...")
                 generator = self.ollama_adapter.generate_response(
                     model=model,

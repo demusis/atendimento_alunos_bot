@@ -9,15 +9,15 @@ O sistema foi otimizado para rodar em hardware doméstico (Windows/Mac/Linux) ou
 ## 🌟 Funcionalidades de Elite
 
 *   **Busca Semântica Avançada (RAG)**: O bot não apenas conversa, ele "lê" seus documentos. Suporta arquivos `.pdf`, `.docx`, `.txt`, `.csv` e `.md`.
+*   **Gestão de Lembretes Inteligentes**: Agende comandos de voz ou texto via `/lembrete` para que o bot envie avisos automáticos em datas específicas (ex: vésperas de prova).
 *   **Gestão Híbrida de Provedores**:
     *   **Local (Ollama)**: Privacidade total e custo zero usando modelos como `Llama3` ou `Qwen3`.
     *   **Nuvem (OpenRouter)**: Acesso a modelos de ponta (GPT-4o, Claude 3.5) com latência reduzida.
-*   **Limpeza Inteligente de Fórmulas Matémativas**: Tradução automática de LaTeX para texto simples (ex: `\frac{a}{b} -> (a/b)`), garantindo que o aluno receba respostas legíveis no celular.
+*   **Limpeza Inteligente de Fórmulas Matémativas**: Tradução automática de LaTeX para texto simples, garantindo que o aluno receba respostas legíveis no celular.
 *   **Controle de Fluxo e Segurança**:
     *   **Rate Limiting**: Proteção contra spam de mensagens por usuário.
-    *   **Admin Dashboard**: Uma interface PyQt6 completa para monitorar logs, trocar modelos e gerenciar a base de conhecimento.
-*   **Comandos Dinâmicos via Telegram**: Administradores podem gerenciar o bot sem sair do celular.
-*   **Otimização para Raspberry Pi**: Modo "Headless" (CLI) com script de instalação automatizado.
+    *   **Admin Dashboard**: Interface PyQt6 completa para monitorar logs detalhados, trocar modelos e gerenciar a base de conhecimento.
+*   **Gestão Remota Total**: Administradores podem monitorar hardware, atualizar o sistema e reiniciar o bot diretamente pelo Telegram.
 
 ---
 
@@ -25,9 +25,9 @@ O sistema foi otimizado para rodar em hardware doméstico (Windows/Mac/Linux) ou
 
 O projeto é dividido em módulos para garantir estabilidade:
 - **`main_window.py`**: Interface administrativa (PyQt6). centraliza configurações e monitoramento.
-- **`telegram_controller.py`**: O "cérebro" das interações. Gerencia sessões, comandos e fluxo RAG.
+- **`telegram_controller.py`**: O "cérebro" das interações. Gerencia sessões, comandos, agendamentos e fluxo RAG.
 - **`rag_repository.py`**: Motor de busca vetorial utilizando **ChromaDB**.
-- **`ingest_worker.py`**: Processo em segundo plano que evita travamentos da interface e conflitos de escrita no banco de dados.
+- **`log_observer.py`**: Interceptor de logs que permite visualizar a atividade do bot tanto no terminal quanto na interface gráfica.
 
 ---
 
@@ -60,57 +60,50 @@ No terminal do seu Raspberry, execute:
 ```bash
 bash install_rp4.sh
 ```
-**O que o script faz?**
-- Instala o **Ollama** automaticamente.
-- Baixa os modelos de embedding recomendados: `nomic-embed-text` (Leve) e `qwen3-embedding` (Preciso).
-- Cria o ambiente virtual e instala dependências.
-- Configura o serviço de inicialização automática (**systemd**).
-
-### Fluxo de Trabalho de Alta Performance
-Dica de mestre: Você pode gerar o banco de dados de conhecimento no seu PC (mais rápido) e simplesmente copiar a pasta `db_atendimento` para o Raspberry Pi. O sistema reconhecerá os arquivos instantaneamente!
 
 ---
 
-## 🕹️ Comandos de Administrador (Telegram)
+## 🕹️ Painel de Controle Remoto (Comandos de Admin)
 
-Para IDs configurados como administrador, os seguintes comandos são habilitados:
+Para administradores, o bot oferece um conjunto completo de ferramentas de gestão:
 
-*   `/ia [nome_do_modelo]`: Lista modelos disponíveis ou troca o modelo de geração.
-*   `/embedding [modelo]`: Lista ou altera o modelo de busca vetorial.
-*   `/limpar`: Apaga toda a base de conhecimento (necessário ao trocar de modelo de embedding).
-*   `/status`: Relatório de saúde, uso de memória e latência do sistema.
-*   `/aviso [texto]`: Envia um comunicado para TODOS os usuários do bot.
-*   `/admin_summary [dias]`: A IA analisa os logs e gera um resumo dos principais problemas levantados pelos alunos.
-*   **Envio de Arquivos**: Envie um PDF/TXT diretamente para o bot no chat privado para adicioná-lo à base instantaneamente.
+### 🧠 IA & Conhecimento
+*   `/ia [modelo]`: Troca o modelo de geração (ex: `Llama3`).
+*   `/embedding [modelo]`: Troca o modelo de busca vetorial.
+*   `/conhecimento [texto]`: Adiciona uma informação diretamente à base sem precisar de arquivos.
+*   `/listar`: Lista todos os documentos indexados.
+*   `/remover [nome]`: Apaga um documento específico da base.
+*   `/limpar`: Reseta totalmente o banco de dados.
+
+### 📢 Comunicação & Agendamento
+*   `/aviso [texto]`: Envia uma mensagem imediata para TODOS os alunos.
+*   `/lembrete DD/MM HH:MM [texto]`: Agenda um aviso para ser enviado automaticamente no futuro.
+*   `/faq`: Visualiza a base de perguntas frequentes.
+
+### 🖥️ Gestão de Sistema (Hardware)
+*   `/status`: Relatório completo de hardware (IP, Memória RAM, Disco, GPU e Latência).
+*   `/monitor_cpu`: Lista os processos que mais consomem processamento no momento.
+*   `/speedtest`: Realiza um teste de velocidade de internet no servidor.
+*   `/ping_ia`: Mede o tempo de resposta do Ollama e OpenRouter.
+*   `/atualizar`: Baixa atualizações via Git e reinstala dependências.
+*   `/reiniciar_bot`: Reinicia o processo do bot remotamente.
 
 ---
 
-## 📁 Organização de Pastas de Conhecimento
+## ⚙️ Parâmetros Recentes e Requisitos
 
-O bot monitora a pasta `arquivos` e indexa:
-1.  **`horario*.*`**: Arquivos de PDF/Imagens vinculados ao botão "Horário".
-2.  **`cronograma*.*`**: Arquivos vinculados ao botão "Cronograma".
-3.  **`materiais.txt`**: Link de pastas ou orientações fixas.
-4.  **`faq.txt`**: Base de perguntas frequentes para resposta rápida.
-
----
-
-## ⚙️ Configurações Técnicas (`config.json`)
-
-| Parâmetro | Descrição | Sugestão |
+| Dependência | Versão Mínima | Finalidade |
 | :--- | :--- | :--- |
-| `ai_provider` | `ollama` ou `openrouter` | `openrouter` (para RPi4) |
-| `embedding_provider` | `ollama` ou `openrouter` | `ollama` (Velocidade local) |
-| `ollama_embedding_model` | Modelo de busca local | `nomic-embed-text` |
-| `rag_k` | Quantidade de trechos recuperados | `8` |
-| `rate_limit_per_minute` | Teto de mensagens/usuário | `10` |
-| `chroma_dir` | Local físico do banco | `C:/bot/db` ou `/home/pi/db` |
+| `psutil` | `5.9.0` | Monitoramento de RAM/Disco |
+| `GPUtil` | `1.4.0` | Monitoramento de GPU |
+| `speedtest-cli` | `2.1.3` | Teste de conexão |
+| `python-telegram-bot` | `21.5` | Motor do chat |
 
 ---
 
 ## 📊 Privacidade e Segurança
 
-Nenhuma conversa é enviada para treinamento de modelos de terceiros se você usar o modo 100% local. Caso use o modo híbrido, as mensagens passam pelo OpenRouter de forma anonimizada. Os arquivos originais (PDFs) permanecem localmente no seu hardware, sendo enviados para a IA apenas trechos específicos para resposta.
+Nenhuma conversa é enviada para treinamento de modelos de terceiros se você usar o modo 100% local. No modo híbrido, as mensagens passam pelo OpenRouter de forma anonimizada. Os arquivos originais (PDFs) permanecem localmente no seu hardware, sendo processados em fragmentos apenas quando necessário para responder aos alunos.
 
 ---
 **Desenvolvido para facilitar o suporte acadêmico e democratizar o acesso à informação.** 📚🤖

@@ -82,6 +82,27 @@ class LogObserver(QObject):
                  # Mimic terminal behavior if needed
                  return getattr(self.original_stdout, 'isatty', lambda: False)()
 
+            def fileno(self) -> int:
+                if hasattr(self.original_stdout, 'fileno'):
+                    return self.original_stdout.fileno()
+                raise OSError("Stdout is restricted")
+
+            @property
+            def encoding(self) -> str:
+                return getattr(self.original_stdout, 'encoding', 'utf-8')
+
+            @property
+            def errors(self) -> str:
+                return getattr(self.original_stdout, 'errors', 'strict')
+
+            @property
+            def closed(self) -> bool:
+                return getattr(self.original_stdout, 'closed', False)
+
+            @property
+            def mode(self) -> str:
+                return getattr(self.original_stdout, 'mode', 'w')
+
         # Save original stdout usually only once
         if not isinstance(sys.stdout, StdoutRedirector):
             sys.stdout = StdoutRedirector(self, sys.stdout)

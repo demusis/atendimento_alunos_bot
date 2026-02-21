@@ -9,6 +9,7 @@ env/
 # App Specific
 config.json
 history.jsonl
+reminders.json
 chroma_db/
 temp_ingest/
 *.log
