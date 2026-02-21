@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
     QTextEdit, QPushButton, QLabel, QFileDialog, QProgressBar, 
     QLineEdit, QFormLayout, QDoubleSpinBox, QSpinBox, QMessageBox,
-    QComboBox
+    QComboBox, QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PyQt6.QtCore import pyqtSlot, Qt, QTimer
 from config_manager import ConfigurationManager
