@@ -42,18 +42,21 @@ def main():
     parser.add_argument("--cli", action="store_true", help="Rodar em modo texto (sem interface gráfica)")
     args, unknown = parser.parse_known_args()
 
-    # CLI Mode
+    # Explicit CLI Mode
     if args.cli:
         try:
             asyncio.run(run_cli())
         except KeyboardInterrupt:
-            # Already handled in run_cli, but catch here to prevent traceback on Windows
             pass
         return
 
-    # GUI Mode (Default)
+    # GUI Mode (Attempt)
     try:
-        from PyQt6.QtWidgets import QApplication, QMessageBox
+        # Check if we have a display available (on Linux/Raspberry)
+        if sys.platform != "win32" and "DISPLAY" not in os.environ:
+             raise RuntimeError("Nenhum monitor (X11 Display) detectado.")
+
+        from PyQt6.QtWidgets import QApplication
         from main_window import MainWindow
         
         app = QApplication(sys.argv)
@@ -63,18 +66,27 @@ def main():
 
         window = MainWindow()
         window.show()
+        
+        # If we reached here, the GUI is running. 
+        # app.exec() will block until the window is closed.
         sys.exit(app.exec())
         
     except Exception as e:
-        print(f"Critical Error during startup: {e}")
-        # If QApplication is alive, try to show message box
-        if 'PyQt6' in sys.modules:
-             try:
-                 from PyQt6.QtWidgets import QApplication, QMessageBox
-                 if QApplication.instance():
-                     QMessageBox.critical(None, "Critical Error", f"Application failed to start:\n{e}")
-             except:
-                 pass
+        if not args.cli:
+            print(f"\n⚠️  Aviso: Não foi possível iniciar a interface gráfica.")
+            print(f"Erro: {e}")
+            print("-" * 50)
+            print("Acionando MODO CLI automaticamente...")
+            print("-" * 50)
+        
+        try:
+            # We need to import os if we use it for env check
+            import os
+            asyncio.run(run_cli())
+        except KeyboardInterrupt:
+            pass
 
 if __name__ == "__main__":
+    # Ensure os is available for the check
+    import os
     main()
