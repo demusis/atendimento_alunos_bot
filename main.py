@@ -1,4 +1,5 @@
 import sys
+import os
 import logging
 import argparse
 import asyncio
@@ -53,8 +54,8 @@ def main():
     # GUI Mode (Attempt)
     try:
         # Check if we have a display available (on Linux/Raspberry)
-        if sys.platform != "win32" and "DISPLAY" not in os.environ:
-             raise RuntimeError("Nenhum monitor (X11 Display) detectado.")
+        if sys.platform != "win32" and "DISPLAY" not in os.environ and "WAYLAND_DISPLAY" not in os.environ:
+             raise RuntimeError("Nenhum monitor (X11/Wayland Display) detectado.")
 
         from PyQt6.QtWidgets import QApplication
         from main_window import MainWindow
@@ -66,27 +67,19 @@ def main():
 
         window = MainWindow()
         window.show()
-        
-        # If we reached here, the GUI is running. 
-        # app.exec() will block until the window is closed.
         sys.exit(app.exec())
         
     except Exception as e:
-        if not args.cli:
-            print(f"\n⚠️  Aviso: Não foi possível iniciar a interface gráfica.")
-            print(f"Erro: {e}")
-            print("-" * 50)
-            print("Acionando MODO CLI automaticamente...")
-            print("-" * 50)
+        print(f"\n⚠️  Aviso: Não foi possível iniciar a interface gráfica.")
+        print(f"Erro: {e}")
+        print("-" * 50)
+        print("Acionando MODO CLI automaticamente...")
+        print("-" * 50)
         
         try:
-            # We need to import os if we use it for env check
-            import os
             asyncio.run(run_cli())
         except KeyboardInterrupt:
             pass
 
 if __name__ == "__main__":
-    # Ensure os is available for the check
-    import os
     main()

@@ -118,17 +118,6 @@ class ConfigurationManager:
         value : Any
             The value to store.
         """
-    def set(self, key: str, value: Any) -> None:
-        """
-        Set a configuration value and save to file.
-
-        Parameters
-        ----------
-        key : str
-            The configuration key to set.
-        value : Any
-            The value to store.
-        """
         self._config_data[key] = value
         self._save_config()
 

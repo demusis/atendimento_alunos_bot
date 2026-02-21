@@ -52,7 +52,7 @@ fi
 echo -e "⚙️ 6. Ajustando permissões dos scripts..."
 chmod +x start_rp4.sh
 
-# 5. Resumo e Instruções
+# 7. Resumo e Instruções
 echo -e "${GREEN}"
 echo "--------------------------------------------------------"
 echo "        ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO!"
