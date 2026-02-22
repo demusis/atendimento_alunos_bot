@@ -63,17 +63,12 @@ bash install_rp4.sh
 
 ---
 
-## 🕹️ Painel de Controle Remoto (Comandos de Admin)
-
-Para administradores, o bot oferece um conjunto completo de ferramentas de gestão:
-
-### 🧠 IA & Conhecimento
-*   `/ia [modelo]`: Troca o modelo de geração (ex: `Llama3`).
-*   `/embedding [modelo]`: Troca o modelo de busca vetorial.
-*   `/conhecimento [texto]`: Adiciona uma informação diretamente à base sem precisar de arquivos.
-*   `/listar`: Lista todos os documentos indexados.
-*   `/remover [nome]`: Apaga um documento específico da base.
-*   `/limpar`: Reseta totalmente o banco de dados.
+## 🕹️ Painel### 📊 Análise & Identidade
+*   `/estatisticas`: Dashboard de uso e saúde do sistema.
+*   `/admin_summary [10|50|100]`: Gera um resumo executivo via IA das últimas interações dos alunos.
+*   `/insight [qtd] [pergunta]`: Responde perguntas específicas baseando-se no histórico recente de mensagens.
+*   `/limpar_historico`: Zera permanentemente todos os logs de interações dos usuários (com confirmação).
+*   `/meuid`: Exibe seu ID numérico do Telegram.
 
 ### 📢 Comunicação & Agendamento
 *   `/aviso [texto]`: Envia uma mensagem imediata para TODOS os alunos.
@@ -81,29 +76,30 @@ Para administradores, o bot oferece um conjunto completo de ferramentas de gest�
 *   `/faq`: Visualiza a base de perguntas frequentes.
 
 ### 🖥️ Gestão de Sistema (Hardware)
-*   `/status`: Relatório completo de hardware (IP, Memória RAM, Disco, GPU e Latência).
+*   `/status`: Relatório em tempo real de hardware (RAM, Disco, Latência da IA) de forma otimizada.
+*   `/logs [baixo|médio|alto]`: Altera o nível de detalhamento dos logs (Debug, Info ou Warnings).
 *   `/monitor_cpu`: Lista os processos que mais consomem processamento no momento.
 *   `/speedtest`: Realiza um teste de velocidade de internet no servidor.
 *   `/ping_ia`: Mede o tempo de resposta do Ollama e OpenRouter.
 *   `/atualizar`: Baixa atualizações via Git e reinstala dependências.
-*   `/reiniciar_bot`: Reinicia o processo do bot remotamente.
+*   `/reiniciar_bot`: Reinicia o processo do bot remotamente para aplicar configurações.
 
 ---
 
-## ⚙️ Parâmetros Recentes e Requisitos
+## ⚙️ Requisitos e Dependências
 
 | Dependência | Versão Mínima | Finalidade |
 | :--- | :--- | :--- |
 | `psutil` | `5.9.0` | Monitoramento de RAM/Disco |
-| `GPUtil` | `1.4.0` | Monitoramento de GPU |
-| `speedtest-cli` | `2.1.3` | Teste de conexão |
 | `python-telegram-bot` | `21.5` | Motor do chat |
+| `python-telegram-bot[job-queue]` | Opcional | Agendamento de lembretes |
+| `speedtest-cli` | `2.1.3` | Teste de conexão |
 
 ---
 
 ## 📊 Privacidade e Segurança
 
-Nenhuma conversa é enviada para treinamento de modelos de terceiros se você usar o modo 100% local. No modo híbrido, as mensagens passam pelo OpenRouter de forma anonimizada. Os arquivos originais (PDFs) permanecem localmente no seu hardware, sendo processados em fragmentos apenas quando necessário para responder aos alunos.
+Nenhuma conversa é enviada para treinamento de modelos de terceiros se você usar o modo 100% local. No modo híbrido, as mensagens passam pelo OpenRouter de forma anonimizada. Os arquivos originais (PDFs) permanecem localmente no seu hardware, sendo processados em fragmentos apenas quando necessário para responder aos alunos. Todo o histórico de interações pode ser apagado permanentemente a qualquer momento via comando administrativo.
 
 ---
 **Desenvolvido para facilitar o suporte acadêmico e democratizar o acesso à informação.** 📚🤖

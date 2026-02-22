@@ -34,7 +34,7 @@ class OpenRouterAdapter:
             "input": texts
         }
         
-        response = requests.post(f"{self.base_url}/embeddings", headers=headers, json=payload)
+        response = requests.post(f"{self.base_url}/embeddings", headers=headers, json=payload, timeout=20)
         response.raise_for_status()
         
         data = response.json()
@@ -90,7 +90,7 @@ class OpenRouterAdapter:
         }
 
         try:
-            with requests.post(url, headers=headers, json=payload, stream=True) as response:
+            with requests.post(url, headers=headers, json=payload, stream=True, timeout=(5, 60)) as response:
                 response.raise_for_status()
                 
                 for line in response.iter_lines():
