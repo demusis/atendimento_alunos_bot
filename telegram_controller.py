@@ -124,12 +124,25 @@ class TelegramBotController:
         loop = asyncio.get_running_loop()
         
         def _run():
-            result = subprocess.run(
-                [sys.executable, self._worker_script],
-                input=worker_data,
-                capture_output=True, text=True,
-                cwd=os.path.dirname(os.path.abspath(__file__))
-            )
+            # Determine worker command
+            if getattr(sys, 'frozen', False):
+                # We are in a bundle (exe)
+                cmd = [sys.executable, "--worker"]
+            else:
+                # We are running from source
+                cmd = [sys.executable, self._worker_script]
+
+            try:
+                result = subprocess.run(
+                    cmd,
+                    input=worker_data,
+                    capture_output=True, text=True,
+                    cwd=os.path.dirname(os.path.abspath(__file__)),
+                    timeout=45 # 45 seconds timeout for any DB operation
+                )
+            except subprocess.TimeoutExpired:
+                 logger.error(f"ChromaDB worker timed out after 45s (Action: {action_data.get('action')})")
+                 raise RuntimeError("Base de dados demorou muito para responder")
             if result.returncode != 0:
                 error_msg = result.stderr.strip() if result.stderr else "Processo encerrado inesperadamente"
                 raise RuntimeError(f"ChromaDB worker failed (exit {result.returncode}): {error_msg}")
@@ -173,6 +186,8 @@ class TelegramBotController:
         self.application.add_handler(CommandHandler("lembrete", self._cmd_add_reminder))
         # Admin System Management
         self.application.add_handler(CommandHandler("reiniciar_bot", self._cmd_restart_bot))
+        self.application.add_handler(CommandHandler("logs", self._cmd_verbosity))
+        self.application.add_handler(CommandHandler("limpar_historico", self._cmd_clear_history))
         self.application.add_handler(CommandHandler("monitor_cpu", self._cmd_monitor_cpu))
         self.application.add_handler(CommandHandler("speedtest", self._cmd_speedtest))
         self.application.add_handler(CommandHandler("ping_ia", self._cmd_ping_ia))
@@ -257,14 +272,16 @@ class TelegramBotController:
                 "• /status - Relatório completo de saúde e hardware\n"
                 "• /monitor_cpu - Uso de CPU e processos ativos\n"
                 "• /speedtest - Teste de internet no servidor\n"
+                "• /logs <code>[baixo|médio|alto]</code> - Nível de detalhes\n"
+                "• /limpar_historico - Zera os logs de interações\n"
                 "• /ping_ia - Latência (Ollama vs OpenRouter)\n"
                 "• /atualizar - Git Pull + Update dependencies\n"
                 "• /reiniciar_bot - Reinicia o processo do bot\n\n"
                 
                 "📊 <b>Análise & Identidade:</b>\n"
                 "• /estatisticas - Dashboard de uso geral\n"
-                "• /admin_summary - Resumo por IA das dúvidas dos alunos\n"
-                "• /insight - Análise profunda de tendências\n"
+                "• /admin_summary - Resumo por IA das últimas interações\n"
+                "• /insight <code>[qtd] [pergunta]</code> - Análise de tendências\n"
                 "• /meuid - Ver seu ID do Telegram\n\n"
                 
                 "🧭 <b>Geral:</b>\n"
@@ -490,90 +507,66 @@ class TelegramBotController:
             await status_msg.edit_text(f"❌ Erro ao limpar base: {e}")
 
     async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle the /status command."""
+        """Handle the /status command with parallel execution for speed."""
         if not update.message: return
         if not self._is_admin(update):
             await update.message.reply_text("⛔ Acesso negado.")
             return
 
-        status_msg = await update.message.reply_text("⏳ Coletando informações do sistema...")
+        status_msg = await update.message.reply_text("⏳ Coletando informações do sistema em tempo real...")
         
-        try:
-            # 1. Check Ollama
+        async def get_ollama_info():
             import time
-            start_time = time.time()
-            models = self.ollama_adapter.list_models()
-            latency = (time.time() - start_time) * 1000
-            ollama_status = "✅ Online" if models else "❌ Offline"
-            
-            # 2. Get DB Stats
-            db_stats = await self._run_chroma_worker({"action": "stats"})
-            
-            # 3. System Metrics
-            import socket
-            import platform
-            hostname = platform.node()
-            
-            # Get Local IP
             try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.connect(("8.8.8.8", 80))
-                local_ip = s.getsockname()[0]
-                s.close()
+                start_time = time.time()
+                # Run list_models in a thread to not block event loop
+                loop = asyncio.get_running_loop()
+                models = await loop.run_in_executor(None, self.ollama_adapter.list_models)
+                latency = (time.time() - start_time) * 1000
+                return ("✅ Online" if models else "❌ Offline", f"{latency:.0f}ms")
             except:
-                local_ip = "127.0.0.1"
+                return ("❌ Offline", "N/A")
 
-            # Hardware usage (Try psutil)
-            mem_info = "N/A"
-            disk_info = "N/A"
-            gpu_info = "N/A (Carga CPU)"
-            
+        async def get_sys_metrics():
+            import socket, platform
+            hostname = platform.node()
             try:
                 import psutil
-                # RAM
                 mem = psutil.virtual_memory()
                 mem_info = f"{mem.percent}% ({mem.used // (1024**2)}MB / {mem.total // (1024**2)}MB)"
-                
-                # Disk
                 disk = psutil.disk_usage('/')
-                disk_info = f"{disk.percent}% ({disk.free // (1024**3)}GB livres de {disk.total // (1024**3)}GB)"
-                
-                # GPU (Optional)
-                try:
-                    import GPUtil
-                    gpus = GPUtil.getGPUs()
-                    if gpus:
-                        gpu = gpus[0]
-                        gpu_info = f"{gpu.load*100:.1f}% ({gpu.memoryUsed}MB / {gpu.memoryTotal}MB)"
-                except:
-                    pass
+                disk_info = f"{disk.percent}% ({disk.free // (1024**3)}GB de {disk.total // (1024**3)}GB)"
+                return hostname, mem_info, disk_info
             except:
-                pass
+                return hostname, "N/A", "N/A"
+
+        try:
+            # Execute database and system tasks in parallel
+            db_task = self._run_chroma_worker({"action": "stats"})
+            ollama_task = get_ollama_info()
+            metrics_task = get_sys_metrics()
+            
+            db_stats, (ollama_status, ollama_lat), (hostname, mem_info, disk_info) = await asyncio.gather(
+                db_task, ollama_task, metrics_task
+            )
 
             current_model = self.config_manager.get("ollama_model", "N/A")
             provider = self.config_manager.get("ai_provider", "ollama")
-            
-            # Embedding Info
             emb_provider = self.config_manager.get("embedding_provider", "ollama")
-            if emb_provider == "openrouter":
-                emb_model = self.config_manager.get("openrouter_embedding_model", "openai/text-embedding-3-small")
-            else:
-                emb_model = self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
-
+            
             import html
             report = (
                 "📊 <b>Status do Sistema</b>\n\n"
                 f"🖥️ <b>Host:</b> <code>{html.escape(hostname)}</code>\n"
-                f"🌐 <b>IP Local:</b> <code>{local_ip}</code>\n"
-                f"📈 <b>Memória RAM:</b> <code>{mem_info}</code>\n"
-                f"💽 <b>Disco:</b> <code>{disk_info}</code>\n"
-                f"🎮 <b>GPU:</b> <code>{gpu_info}</code>\n\n"
+                f"📈 <b>RAM:</b> <code>{mem_info}</code>\n"
+                f"💽 <b>Disco:</b> <code>{disk_info}</code>\n\n"
                 f"🤖 <b>AI Chat:</b> <code>{provider.upper()}</code> ({html.escape(str(current_model))})\n"
-                f"🧬 <b>Embeddings:</b> <code>{emb_provider.upper()}</code> ({html.escape(str(emb_model))})\n"
-                f"📡 <b>Ollama:</b> {ollama_status} ({latency:.0f}ms)\n\n"
+                f"🧬 <b>Embeddings:</b> <code>{emb_provider.upper()}</code>\n"
+                f"📡 <b>Ollama:</b> {ollama_status} ({ollama_lat})\n\n"
                 "📂 <b>Base de Conhecimento:</b>\n"
-                f"- Arquivos: <code>{db_stats.get('file_count', 0)}</code> unidades\n"
-                f"- Fragmentos (Chunks): <code>{db_stats.get('chunk_count', 0)}</code> registros\n"
+                f"- Arquivos: <code>{db_stats.get('file_count', 0)}</code>\n"
+                f"- Fragmentos: <code>{db_stats.get('chunk_count', 0)}</code>\n\n"
+                "<i>Nota: Para teste de internet, use /speedtest separadamente.</i>"
             )
             await status_msg.edit_text(report, parse_mode="HTML")
         except Exception as e:
@@ -582,11 +575,58 @@ class TelegramBotController:
 
     async def _cmd_restart_bot(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/reiniciar_bot - Restart the bot process."""
-        if not update.message: return
-        if not self._is_admin(update): return
-        await update.message.reply_text("🔄 Reiniciando o bot... Voltarei em alguns segundos.")
         import os, sys
         os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    async def _cmd_verbosity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/logs [baixo|médio|alto] - Switch logging levels."""
+        if not update.message or not self._is_admin(update): return
+        
+        if not context.args:
+            current = self.config_manager.get("log_verbosity", "médio")
+            await update.message.reply_text(
+                f"📝 <b>Configuração de Logs</b>\n\n"
+                f"Nível atual: <code>{current}</code>\n\n"
+                f"Opções:\n"
+                f"• <code>/logs baixo</code> (Apenas erros importantes)\n"
+                f"• <code>/logs médio</code> (Padrão: info e ações)\n"
+                f"• <code>/logs alto</code> (Debug completo / depuração)\n\n"
+                f"<i>Nota: Alterar o nível reiniciará o bot para aplicar as novas regras.</i>",
+                parse_mode="HTML"
+            )
+            return
+
+        level = context.args[0].lower()
+        if level not in ["baixo", "médio", "alto"]:
+            await update.message.reply_text("❌ Nível inválido. Use: baixo, médio ou alto.")
+            return
+
+        self.config_manager.set("log_verbosity", level)
+        await update.message.reply_text(f"✅ Nível de logs alterado para <b>{level}</b>. Reiniciando...", parse_mode="HTML")
+        
+        # Restart to apply logging changes (logging configuration is done at startup)
+        import os, sys
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    async def _cmd_clear_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/limpar_historico - Delete all interaction logs."""
+        if not update.message or not self._is_admin(update): return
+        
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        reply_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Sim, Limpar Tudo", callback_data="btn_confirm_clear_history"),
+                InlineKeyboardButton("❌ Cancelar", callback_data="btn_cancel_clear_history")
+            ]
+        ])
+        await update.message.reply_text(
+            "⚠️ <b>AVISO CRÍTICO</b>\n\n"
+            "Você está prestes a apagar <b>TODO o histórico de interações</b> dos usuários. "
+            "Isso zerará as estatísticas e os resumos de IA.\n\n"
+            "Deseja continuar?",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
 
     async def _cmd_monitor_cpu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/monitor_cpu - Show CPU usage and top processes."""
@@ -1189,10 +1229,20 @@ class TelegramBotController:
              ) # type: ignore
              await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
         
+        elif data == "btn_confirm_clear_history":
+            if self.analytics.clear_history():
+                await query.edit_message_text("✅ <b>Histórico de interações apagado com sucesso.</b>", parse_mode="HTML")
+                logger.info("Histórico de interações limpo pelo administrador.")
+            else:
+                await query.edit_message_text("❌ Falha ao limpar o histórico.")
+                
+        elif data == "btn_cancel_clear_history":
+            await query.edit_message_text("❌ Ação cancelada pelo administrador.")
+
         # --- Admin Buttons (Summary) ---
         elif data.startswith("btn_summary_"):
-            days = int(data.split("_")[2])
-            await self._generate_ai_summary(query, days)
+            count = int(data.split("_")[2])
+            await self._generate_ai_summary(query, count)
 
     async def _cmd_admin_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Help for admin ingestion."""
@@ -1214,13 +1264,13 @@ class TelegramBotController:
             
         keyboard = [
             [
-                InlineKeyboardButton("Últimas 24h", callback_data="btn_summary_1"),
-                InlineKeyboardButton("7 Dias", callback_data="btn_summary_7"),
-                InlineKeyboardButton("30 Dias", callback_data="btn_summary_30"),
+                InlineKeyboardButton("Últimas 10", callback_data="btn_summary_10"),
+                InlineKeyboardButton("Últimas 50", callback_data="btn_summary_50"),
+                InlineKeyboardButton("Últimas 100", callback_data="btn_summary_100"),
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("📊 **Relatório de Interações**\nEscolha o período para análise:", reply_markup=reply_markup) # type: ignore
+        await update.message.reply_text("📊 **Relatório de Interações**\nEscolha a quantidade de mensagens recentes para análise:", reply_markup=reply_markup) # type: ignore
 
     async def _cmd_admin_insight(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -1232,33 +1282,33 @@ class TelegramBotController:
             return
             
         if not context.args:
-            await update.message.reply_text("Uso: `/insight [dias] [pergunta]`\nEx: `/insight 7 Quais as dúvidas sobre provas?`") # type: ignore
+            await update.message.reply_text("Uso: `/insight [quantidade] [pergunta]`\nEx: `/insight 50 Quais as dúvidas sobre provas?`") # type: ignore
             return
 
         try:
             # Parse args
             if context.args[0].isdigit():
-                days = int(context.args[0])
+                count = int(context.args[0])
                 question = " ".join(context.args[1:])
             else:
-                days = 7
+                count = 50
                 question = " ".join(context.args)
                 
             if not question:
                  await update.message.reply_text("Por favor, digite sua pergunta.") # type: ignore
                  return
                  
-            await update.message.reply_text(f"🔍 Analisando logs de {days} dias sobre: '{question}'...") # type: ignore
+            await update.message.reply_text(f"🔍 Analisando as últimas {count} interações sobre: '{question}'...") # type: ignore
             
             # Get Logs
-            logs_text = self.analytics.get_logs(days)
+            logs_text = self.analytics.get_logs_by_count(count)
             if len(logs_text) < 10:
                 await update.message.reply_text(f"ℹ️ {logs_text}") # type: ignore
                 return
                 
             # Construct Prompt
             prompt = (
-                f"Analise o seguinte log de interações (Perguntas de usuários) dos últimos {days} dias:\n\n"
+                f"Analise o seguinte log das últimas {count} interações:\n\n"
                 f"{logs_text}\n\n"
                 f"RESPONDA À SEGUINTE PERGUNTA DO ADMINISTRADOR:\n"
                 f"Question: {question}\n\n"
@@ -1288,25 +1338,24 @@ class TelegramBotController:
             await update.message.reply_text("Erro ao processar insight.") # type: ignore
 
 
-    async def _generate_ai_summary(self, query, days: int) -> None:
-        """Generate AI Summary from logs."""
-        await query.edit_message_text(text=f"🔄 Analisando logs dos últimos {days} dias... aguarde.")
+    async def _generate_ai_summary(self, query, count: int) -> None:
+        """Generate AI Summary from last 'count' interactions."""
+        await query.edit_message_text(text=f"🔄 Analisando as últimas {count} interações... aguarde.")
         
         # 1. Get Logs
-        logs_text = self.analytics.get_logs(days)
+        logs_text = self.analytics.get_logs_by_count(count)
         if len(logs_text) < 10: # "Nenhum..." or empty
              await query.edit_message_text(text=f"ℹ️ {logs_text}")
              return
 
         # 2. Prompt LLM
         prompt = (
-            f"Analise o seguinte log de interações (Perguntas de usuários) dos últimos {days} dias:\n\n"
+            f"Analise o seguinte log das últimas {count} interações:\n\n"
             f"{logs_text}\n\n"
-            "TAREFA: Crie um resumo executivo para o administrador.\n"
-            "- Identifique os 3 tópicos mais frequentes.\n"
-            "- Destaque reclamações ou dúvidas não respondidas (se houver).\n"
-            "- Sugira melhorias na base de conhecimento.\n"
-            "Responda em Português do Brasil, formato Markdown."
+            "FAÇA UM RESUMO EXECUTIVO (MÁXIMO 200 PALAVRAS) DESTACANDO:\n"
+            "1. Principais dúvidas ou problemas relatados.\n"
+            "2. Sugestão de melhoria ou FAQ baseada nessas dúvidas.\n"
+            "Formate em Markdown legível."
         )
         
         try:
@@ -1326,12 +1375,22 @@ class TelegramBotController:
                  
             for chunk in gen:
                 response_text += chunk
-                
-            await query.edit_message_text(text=f"📊 **Relatório IA ({days} dias)**\n\n{response_text}", parse_mode="Markdown")
             
+            if not response_text:
+                await query.edit_message_text(text="⚠️ A IA não retornou um resumo para os logs analisados.")
+                return
+
+            try:
+                await query.edit_message_text(text=f"📊 **Relatório IA ({days} dias)**\n\n{response_text}", parse_mode="Markdown")
+            except Exception as markdown_err:
+                logger.warning(f"Failed to send summary with Markdown, falling back to plain text: {markdown_err}")
+                await query.edit_message_text(text=f"📊 Relatório IA ({days} dias)\n\n{response_text}")
+                
         except Exception as e:
-            logger.error(f"Erro no sumário: {e}")
-            await query.edit_message_text(text="❌ Erro ao gerar resumo verificador logs do servidor.")
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Erro no sumário IA: {e}\n{error_details}")
+            await query.edit_message_text(text="❌ Erro ao gerar o resumo dos logs do servidor. Por favor, tente novamente mais tarde.")
 
     def _is_admin(self, update: Update) -> bool:
         """Check if user is admin. Supports multiple IDs separated by comma."""

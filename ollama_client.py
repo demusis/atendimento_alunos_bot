@@ -79,7 +79,7 @@ class OllamaAdapter:
         }
 
         try:
-            with requests.post(url, json=payload, stream=True) as response:
+            with requests.post(url, json=payload, stream=True, timeout=(5, 120)) as response:
                 response.raise_for_status()
                 
                 for line in response.iter_lines():
@@ -111,7 +111,7 @@ class OllamaAdapter:
         """
         url = f"{self.base_url}/api/tags"
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=5)
             response.raise_for_status()
             data = response.json()
             return [model['name'] for model in data.get('models', [])]

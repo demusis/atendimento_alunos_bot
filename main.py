@@ -5,18 +5,46 @@ import argparse
 import asyncio
 from telegram_controller import TelegramBotController
 
-# Configure logging
+# Handle worker mode for PyInstaller frozen app
+if "--worker" in sys.argv:
+    import ingest_worker
+    ingest_worker.main()
+    sys.exit(0)
+
+# Configure logging levels based on verbosity
+from config_manager import ConfigurationManager
+config_manager = ConfigurationManager()
+verbosity = config_manager.get("log_verbosity", "médio").lower()
+
+if verbosity == "baixo":
+    # Low: Only show warnings/errors for most things
+    root_level = logging.WARNING
+    httpx_level = logging.ERROR
+    telegram_level = logging.ERROR
+elif verbosity == "alto":
+    # High: Full debug everywhere
+    root_level = logging.DEBUG
+    httpx_level = logging.DEBUG
+    telegram_level = logging.DEBUG
+else:
+    # Médio (Default): Standard Info
+    root_level = logging.INFO
+    httpx_level = logging.INFO
+    telegram_level = logging.INFO
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=root_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout)
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log", encoding="utf-8")
     ]
 )
 
-# Enable verbose logs as requested by user
-logging.getLogger("httpx").setLevel(logging.INFO)
-logging.getLogger("telegram").setLevel(logging.DEBUG)
+# Apply specific levels to heavy modules
+logging.getLogger("httpx").setLevel(httpx_level)
+logging.getLogger("telegram").setLevel(telegram_level)
+logging.getLogger("telegram.ext").setLevel(telegram_level)
 
 async def run_cli():
     """Run the bot in CLI mode."""

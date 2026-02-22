@@ -21,3 +21,13 @@ temp_ingest/
 # OS
 .DS_Store
 Thumbs.db
+
+# Build & Distribution
+build/
+dist/
+installer/
+AtendimentoBot.spec
+
+# Database
+db_atendimento/
+chroma_db/

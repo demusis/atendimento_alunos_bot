@@ -116,9 +116,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.btn_ingest)
         
         # Clear DB Action
-        btn_clear = QPushButton("Limpar Banco de Dados")
+        btn_clear = QPushButton("Limpar Banco de Dados (RAG)")
         btn_clear.clicked.connect(self.clear_db)
         layout.addWidget(btn_clear)
+
+        # Clear Interaction History
+        btn_clear_history = QPushButton("🚨 Zerar Histórico de Conversas (Logs)")
+        btn_clear_history.setStyleSheet("background-color: #ffaa00; color: black; font-weight: bold;")
+        btn_clear_history.clicked.connect(self.clear_history_action)
+        layout.addWidget(btn_clear_history)
 
         # Document List Table
         layout.addWidget(QLabel("<b>📄 Documentos na Base:</b>"))
@@ -156,6 +162,11 @@ class MainWindow(QMainWindow):
         
         self.input_admin_id = QLineEdit()
         self.input_admin_id.setPlaceholderText("IDs separados por vírgula (ex: 123456,789012)")
+        
+        # Log Verbosity
+        self.input_log_verbosity = QComboBox()
+        self.input_log_verbosity.addItems(["Baixo", "Médio", "Alto"])
+        self.input_log_verbosity.setToolTip("Nível de detalhes nos logs (Baixo: apenas erros, Alto: tudo)")
         
         # Ollama Widgets
         self.input_ollama_url = QLineEdit()
@@ -206,6 +217,7 @@ class MainWindow(QMainWindow):
         layout.addRow("Provedor de IA:", self.input_provider)
         layout.addRow("Token do Telegram:", self.input_telegram_token)
         layout.addRow("Admin ID:", self.input_admin_id)
+        layout.addRow("Nível de Logs:", self.input_log_verbosity)
         
         self.lbl_ollama_url = QLabel("URL do Ollama:")
         self.lbl_or_key = QLabel("API Key OpenRouter:")
@@ -259,6 +271,7 @@ class MainWindow(QMainWindow):
         
         self.input_telegram_token.textChanged.connect(self.trigger_autosave)
         self.input_admin_id.textChanged.connect(self.trigger_autosave)
+        self.input_log_verbosity.currentTextChanged.connect(self.trigger_autosave)
         self.input_ollama_url.textChanged.connect(self.trigger_autosave)
         self.input_openrouter_key.textChanged.connect(self.trigger_autosave)
         self.input_model_name.currentTextChanged.connect(self.trigger_autosave)
@@ -328,6 +341,7 @@ class MainWindow(QMainWindow):
             "ai_provider": provider,
             "telegram_token": self.input_telegram_token.text(),
             "admin_id": self.input_admin_id.text(),
+            "log_verbosity": self.input_log_verbosity.currentText().lower(),
             "ollama_url": self.input_ollama_url.text(),
             "openrouter_key": self.input_openrouter_key.text(),
             # For simplicity, we save the current model combo text to the specific key based on provider
@@ -389,6 +403,9 @@ class MainWindow(QMainWindow):
 
             self.input_telegram_token.setText(data.get("telegram_token", ""))
             self.input_admin_id.setText(str(data.get("admin_id", "")))
+            
+            verbosity = data.get("log_verbosity", "médio").capitalize()
+            self.input_log_verbosity.setCurrentText(verbosity)
             self.input_ollama_url.setText(data.get("ollama_url", "http://127.0.0.1:11434"))
             self.input_openrouter_key.setText(data.get("openrouter_key", ""))
             
@@ -648,6 +665,24 @@ class MainWindow(QMainWindow):
         
         future = self.async_worker.submit(do_clear())
         self._monitor_future(future, lambda res: [self.append_log(f">> {res}"), self.refresh_knowledge_list()])
+
+    def clear_history_action(self):
+        """Confirm and clear interaction history."""
+        reply = QMessageBox.question(
+            self, "🚨 AVISO CRÍTICO", 
+            "Você está prestes a apagar TODO o histórico de interações (logs) dos usuários.\n\n"
+            "Isso zerará as estatísticas e os resumos de IA. Deseja continuar?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            from analytics_manager import AnalyticsManager
+            analytics = AnalyticsManager()
+            if analytics.clear_history():
+                 self.append_log(">> [SINAL] Histórico de interações apagado com sucesso.")
+                 QMessageBox.information(self, "Sucesso", "O histórico de interações foi zerado.")
+            else:
+                 QMessageBox.warning(self, "Erro", "Não foi possível apagar o histórico.")
 
     def _monitor_future(self, future, callback):
         """Helper to check future completion."""

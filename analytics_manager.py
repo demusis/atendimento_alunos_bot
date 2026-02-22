@@ -67,9 +67,55 @@ class AnalyticsManager:
                     except:
                         continue
             
+            # Limit to last 200 relevant entries to avoid context window issues
+            relevant_logs = relevant_logs[-200:]
+            
             return "\n".join(relevant_logs) if relevant_logs else "Nenhuma interação no período."
         except Exception as e:
             return f"Erro ao ler logs: {e}"
+
+    def get_logs_by_count(self, count: int) -> str:
+        """
+        Retrieve the last `count` log entries.
+        Returns a formatted string for the LLM.
+        """
+        if not os.path.exists(self.log_file):
+            return "Nenhum histórico encontrado."
+            
+        logs = []
+        try:
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                # Read all lines but we'll take the last N
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        user_str = f"{entry.get('full_name', 'User')} (@{entry.get('username', '')})"
+                        logs.append(f"- [{entry['timestamp'][:16]}] [{user_str}] Q: {entry.get('question', '')}")
+                    except:
+                        continue
+            
+            # Take the last 'count' logs
+            relevant_logs = logs[-count:] if count > 0 else logs[-50:]
+            
+            return "\n".join(relevant_logs) if relevant_logs else "Nenhuma interação encontrada."
+        except Exception as e:
+            return f"Erro ao ler logs: {e}"
+
+    def clear_history(self) -> bool:
+        """
+        Clear the entire interaction history file.
+        Returns True if successful.
+        """
+        try:
+            if os.path.exists(self.log_file):
+                os.remove(self.log_file)
+            # Re-create empty file
+            with open(self.log_file, "w", encoding="utf-8") as f:
+                pass
+            return True
+        except Exception as e:
+            print(f"Erro ao limpar histórico: {e}")
+            return False
 
     def get_unique_users(self) -> list[int]:
         """

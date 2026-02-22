@@ -67,7 +67,8 @@ class ConfigurationManager:
             "openrouter_embedding_model": "qwen/qwen3-embedding-8b",
             "chat_history_size": 5,
             "rate_limit_per_minute": 10,
-            "chroma_dir": "db_atendimento"
+            "chroma_dir": "db_atendimento",
+            "log_verbosity": "médio"
         }
         self._config_data = default_config
         self._save_config()
