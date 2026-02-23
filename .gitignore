@@ -31,3 +31,4 @@ AtendimentoBot.spec
 # Database
 db_atendimento/
 chroma_db/
+arquivos/
