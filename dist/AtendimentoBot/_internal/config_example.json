@@ -1,0 +1,16 @@
+{
+    "ai_provider": "ollama",
+    "telegram_token": "SEU_TOKEN_AQUI",
+    "admin_id": "SEU_ID_TELEGRAM_AQUI",
+    "ollama_model": "llama3:latest",
+    "openrouter_key": "SUA_CHAVE_OPENROUTER_AQUI",
+    "openrouter_model": "openai/gpt-3.5-turbo",
+    "system_prompt": "Você é um assistente virtual dedicado ao atendimento de alunos. Forneça orientações sobre horários, disciplinas e material didático. Seja sempre cortês e solícito. RESPONDA APENAS com base no contexto fornecido. Se a informação não estiver disponível, informe que não sabe.",
+    "temperature": 0.7,
+    "max_tokens": 2048,
+    "ollama_url": "http://127.0.0.1:11434",
+    "rag_k": 8,
+    "chroma_dir": "db_atendimento",
+    "embedding_provider": "ollama",
+    "ollama_embedding_model": "nomic-embed-text:latest"
+}
