@@ -742,11 +742,18 @@ class TelegramBotController:
         status_msg = await update.message.reply_text("🔄 Iniciando atualização via Git...")
         import subprocess, sys, os
         try:
-            # 1. Git Pull
+            # 1. Stash local changes to avoid conflicts
+            subprocess.run(["git", "stash"], capture_output=True, text=True)
+            
+            # 2. Git Pull
             res = subprocess.run(["git", "pull"], capture_output=True, text=True)
             if res.returncode != 0:
+                subprocess.run(["git", "stash", "pop"], capture_output=True, text=True)
                 await status_msg.edit_text(f"❌ Erro no Git Pull:\n<code>{res.stderr}</code>", parse_mode="HTML")
                 return
+            
+            # 3. Restore stashed local changes (if any)
+            subprocess.run(["git", "stash", "pop"], capture_output=True, text=True)
             
             # 2. Pip Install
             await status_msg.edit_text("📦 Git atualizado. Verificando dependências...")
