@@ -5,8 +5,10 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
     QTextEdit, QPushButton, QLabel, QFileDialog, QProgressBar, 
     QLineEdit, QFormLayout, QDoubleSpinBox, QSpinBox, QMessageBox,
-    QComboBox, QTableWidget, QTableWidgetItem, QHeaderView
+    QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
+    QCheckBox, QScrollArea, QGroupBox
 )
+from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import pyqtSlot, Qt, QTimer
 from config_manager import ConfigurationManager
 from log_observer import LogObserver
@@ -20,6 +22,14 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Gerenciador do Bot Telegram com IA")
         self.resize(900, 700)
+        
+        # Set Window Icon
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+        if not os.path.exists(icon_path):
+             icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.ico")
+        
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         
         # Dependencies
         self.config_manager = ConfigurationManager()
@@ -72,6 +82,24 @@ class MainWindow(QMainWindow):
         self.tab_settings = QWidget()
         self.init_settings_tab()
         self.tabs.addTab(self.tab_settings, "Configuração")
+        
+        # Tab 4: Menu Customization
+        self.tab_menu = QWidget()
+        
+        # Need action_map for loading settings
+        self.action_map = {
+            "fixed_text": "Texto Fixo (Configurado aqui)",
+            "text_file": "Ler de Arquivo Texto (Em arquivos/)",
+            "file_upload": "Upload de Arquivos (Pelo prefixo)"
+        }
+        self.action_inv_map = {v: k for k, v in self.action_map.items()}
+
+        self.init_menu_tab()
+        self.tabs.addTab(self.tab_menu, "Menu Principal")
+        
+        # Initial Load after ALL tabs are ready
+        self.load_settings_to_ui()
+        self.toggle_provider_ui(self.input_provider.currentText())
 
     def init_terminal_tab(self):
         """Setup the Terminal tab."""
@@ -102,7 +130,7 @@ class MainWindow(QMainWindow):
         # File Selection
         file_layout = QHBoxLayout()
         self.lbl_file = QLabel("Nenhum arquivo selecionado")
-        btn_select = QPushButton("Selecionar Arquivo")
+        btn_select = QPushButton("Selecionar arquivos")
         btn_select.clicked.connect(self.select_file)
         
         file_layout.addWidget(btn_select)
@@ -128,16 +156,16 @@ class MainWindow(QMainWindow):
 
         # Document List Table
         layout.addWidget(QLabel("<b>📄 Documentos na Base:</b>"))
-        self.table_knowledge = QTableWidget(0, 2)
-        self.table_knowledge.setHorizontalHeaderLabels(["Arquivo", "Ações"])
+        self.table_knowledge = QTableWidget(0, 3)
+        self.table_knowledge.setHorizontalHeaderLabels(["Arquivo", "Download", "Ações"])
         self.table_knowledge.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        layout.addWidget(self.table_knowledge)
+        self.table_knowledge.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_knowledge.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self.table_knowledge, 1)
         
         btn_refresh_list = QPushButton("Atualizar Lista")
         btn_refresh_list.clicked.connect(self.refresh_knowledge_list)
         layout.addWidget(btn_refresh_list)
-        
-        layout.addStretch()
 
     def init_settings_tab(self):
         """Setup the Configuration tab."""
@@ -247,10 +275,57 @@ class MainWindow(QMainWindow):
         self.btn_refresh_models = QPushButton("Buscar Modelos")
         self.btn_refresh_models.clicked.connect(self.refresh_models)
         layout.addRow(self.btn_refresh_models)
+ 
+    def init_menu_tab(self):
+        """Setup the Menu Customization tab."""
+        layout = QVBoxLayout(self.tab_menu)
         
-        # Initial Load
-        self.load_settings_to_ui()
-        self.toggle_provider_ui(self.input_provider.currentText())
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll_content = QWidget()
+        self.menu_layout = QVBoxLayout(scroll_content)
+        
+        self.button_widgets = []
+        
+        
+        for i in range(5):
+            group = QGroupBox(f"Botão {i+1}")
+            g_layout = QFormLayout()
+            
+            chk_enabled = QCheckBox("Habilitado")
+            txt_label = QLineEdit()
+            cmb_action = QComboBox()
+            cmb_action.addItems(list(self.action_map.values()))
+            
+            txt_param = QTextEdit()
+            txt_param.setMaximumHeight(60)
+            
+            g_layout.addRow(chk_enabled)
+            g_layout.addRow("Texto do Botão:", txt_label)
+            g_layout.addRow("Tipo de Ação:", cmb_action)
+            g_layout.addRow("Parâmetro (Texto/Arquivo/Prefixo):", txt_param)
+            
+            group.setLayout(g_layout)
+            self.menu_layout.addWidget(group)
+            
+            # Store widgets to access them later
+            self.button_widgets.append({
+                "enabled": chk_enabled,
+                "text": txt_label,
+                "action": cmb_action,
+                "parameter": txt_param
+            })
+            
+            # Connect signals
+            chk_enabled.toggled.connect(self.trigger_autosave)
+            txt_label.textChanged.connect(self.trigger_autosave)
+            cmb_action.currentTextChanged.connect(self.trigger_autosave)
+            txt_param.textChanged.connect(self.trigger_autosave)
+            
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+        
+        layout.addWidget(QLabel("<i>* Alterações são salvas automaticamente após 1 segundo.</i>"))
 
 
     # --- Logic ---
@@ -369,6 +444,22 @@ class MainWindow(QMainWindow):
         updates["chat_history_size"] = self.input_chat_history.value()
         updates["rate_limit_per_minute"] = self.input_rate_limit.value()
         updates["chroma_dir"] = self.input_chroma_dir.text()
+        
+        # Collect Menu Buttons
+        menu_btns = []
+        for i, widgets in enumerate(self.button_widgets):
+            btn_id = f"btn{i+1}"
+            action_display = widgets["action"].currentText()
+            action_key = self.action_inv_map.get(action_display, "fixed_text")
+            
+            menu_btns.append({
+                "id": btn_id,
+                "enabled": widgets["enabled"].isChecked(),
+                "text": widgets["text"].text(),
+                "action": action_key,
+                "parameter": widgets["parameter"].toPlainText()
+            })
+        updates["menu_buttons"] = menu_btns
 
         self.config_manager.update_batch(updates)
         
@@ -431,6 +522,32 @@ class MainWindow(QMainWindow):
             self.input_chat_history.setValue(data.get("chat_history_size", 5))
             self.input_rate_limit.setValue(data.get("rate_limit_per_minute", 10))
             self.input_chroma_dir.setText(data.get("chroma_dir", ""))
+            
+            # --- Menu Buttons ---
+            buttons_config = data.get("menu_buttons", [])
+            for i, btn in enumerate(buttons_config):
+                if i >= len(self.button_widgets): break
+                widgets = self.button_widgets[i]
+                
+                widgets["enabled"].blockSignals(True)
+                widgets["text"].blockSignals(True)
+                widgets["action"].blockSignals(True)
+                widgets["parameter"].blockSignals(True)
+                
+                try:
+                    widgets["enabled"].setChecked(btn.get("enabled", True))
+                    widgets["text"].setText(btn.get("text", ""))
+                    
+                    action_key = btn.get("action", "fixed_text")
+                    action_display = self.action_map.get(action_key, self.action_map["fixed_text"])
+                    widgets["action"].setCurrentText(action_display)
+                    
+                    widgets["parameter"].setText(btn.get("parameter", ""))
+                finally:
+                    widgets["enabled"].blockSignals(False)
+                    widgets["text"].blockSignals(False)
+                    widgets["action"].blockSignals(False)
+                    widgets["parameter"].blockSignals(False)
         finally:
              self.input_provider.blockSignals(False)
              # ... unblock others ...
@@ -537,9 +654,13 @@ class MainWindow(QMainWindow):
             self.input_chroma_dir.setText(dir_path)
 
     def select_file(self):
-        fname, _ = QFileDialog.getOpenFileName(self, "Abrir Arquivo", "", "Documentos (*.pdf *.txt *.csv *.md)")
-        if fname:
-            self.lbl_file.setText(fname)
+        fnames, _ = QFileDialog.getOpenFileNames(self, "Abrir Arquivos", "", "Documentos (*.pdf *.txt *.csv *.md *.docx)")
+        if fnames:
+            self.selected_files = fnames
+            if len(fnames) == 1:
+                self.lbl_file.setText(os.path.basename(fnames[0]))
+            else:
+                self.lbl_file.setText(f"{len(fnames)} arquivos selecionados")
             self.btn_ingest.setEnabled(True)
 
     def ingest_file(self):
@@ -547,16 +668,19 @@ class MainWindow(QMainWindow):
         import logging
         logger = logging.getLogger(__name__)
         
-        fname = self.lbl_file.text()
-        logger.info(f"Ingestão solicitada para: '{fname}'")
-        
-        if not fname or not os.path.exists(fname):
-            logger.warning(f"Arquivo não encontrado ou não selecionado: '{fname}'")
-            self.text_logs.append(f">> Arquivo não encontrado: '{fname}'")
-            return
+        if not hasattr(self, 'selected_files') or not self.selected_files:
+            fname = self.lbl_file.text()
+            if not fname or fname == "Nenhum arquivo selecionado" or not os.path.exists(fname):
+                logger.warning("Nenhum arquivo válido selecionado")
+                self.text_logs.append(">> Nenhum arquivo válido selecionado para ingestão")
+                return
+            self.selected_files = [fname]
             
+        fnames = self.selected_files
+        logger.info(f"Ingestão solicitada para: {fnames}")
+        
         self.btn_ingest.setEnabled(False)
-        self.append_log(f">> [PROCESSO] Iniciando ingestão de '{os.path.basename(fname)}'...")
+        self.append_log(f">> [PROCESSO] Iniciando ingestão de {len(fnames)} arquivo(s)...")
         
         chroma_dir = self.input_chroma_dir.text() or self.config_manager.get("chroma_dir", "") or ""
         provider = self.input_embed_provider.currentText().lower()
@@ -568,10 +692,35 @@ class MainWindow(QMainWindow):
         api_key = self.input_openrouter_key.text() or self.config_manager.get("openrouter_key", "")
         ollama_url = self.input_ollama_url.text() or self.config_manager.get("ollama_url", "http://127.0.0.1:11434")
             
+        # Ensure file is in 'arquivos' folder for download availability
+        import shutil
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        arquivos_path = os.path.join(base_dir, "arquivos")
+        os.makedirs(arquivos_path, exist_ok=True)
+        
+        target_fnames = []
+        for fname_path in fnames:
+            if not os.path.exists(fname_path):
+                continue
+                
+            filename = os.path.basename(fname_path)
+            target_fname = os.path.join(arquivos_path, filename)
+            
+            # Copy to 'arquivos' if it's not already there
+            if os.path.abspath(fname_path) != os.path.abspath(target_fname):
+                try:
+                    shutil.copy2(fname_path, target_fname)
+                    target_fnames.append(target_fname)
+                except Exception as e:
+                    logger.error(f"Erro ao copiar arquivo para 'arquivos': {e}")
+                    target_fnames.append(fname_path)
+            else:
+                target_fnames.append(fname_path)
+
         import json, subprocess
         worker_data = json.dumps({
             "action": "ingest",
-            "file_path": fname,
+            "file_paths": target_fnames,
             "chroma_dir": chroma_dir,
             "model_name": model_name,
             "embedding_provider": provider,
@@ -583,8 +732,15 @@ class MainWindow(QMainWindow):
         def sync_ingest():
             """Run in subprocess to avoid PyQt6/SQLite DLL conflicts."""
             import sys
+            
+            # Use --worker flag if frozen (PyInstaller exe)
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable, "--worker"]
+            else:
+                cmd = [sys.executable, worker_script]
+                
             result = subprocess.run(
-                [sys.executable, worker_script],
+                cmd,
                 input=worker_data,
                 capture_output=True, text=True,
                 cwd=os.path.dirname(os.path.abspath(__file__))
@@ -643,8 +799,15 @@ class MainWindow(QMainWindow):
         
         def sync_clear():
             import sys
+            
+            # Use --worker flag if frozen (PyInstaller exe)
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable, "--worker"]
+            else:
+                cmd = [sys.executable, worker_script]
+                
             result = subprocess.run(
-                [sys.executable, worker_script],
+                cmd,
                 input=worker_data,
                 capture_output=True, text=True,
                 cwd=os.path.dirname(os.path.abspath(__file__))
@@ -712,6 +875,12 @@ class MainWindow(QMainWindow):
         self.append_log(msg)
         QMessageBox.information(self, "Ingestão Concluída", msg)
         self.btn_ingest.setEnabled(True)
+        
+        self.lbl_file.setText("Nenhum arquivo selecionado")
+        if hasattr(self, 'selected_files'):
+            self.selected_files = []
+            self.btn_ingest.setEnabled(False)
+            
         self.refresh_knowledge_list()
 
     def refresh_knowledge_list(self):
@@ -739,8 +908,15 @@ class MainWindow(QMainWindow):
         
         def sync_list():
             import sys
+            
+            # Use --worker flag if frozen (PyInstaller exe)
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable, "--worker"]
+            else:
+                cmd = [sys.executable, worker_script]
+                
             result = subprocess.run(
-                [sys.executable, worker_script],
+                cmd,
                 input=worker_data,
                 capture_output=True, text=True,
                 cwd=os.path.dirname(os.path.abspath(__file__))
@@ -765,13 +941,17 @@ class MainWindow(QMainWindow):
                 # Filename item
                 self.table_knowledge.setItem(row, 0, QTableWidgetItem(filename))
                 
+                # Download button
+                btn_dl = QPushButton("Baixar")
+                btn_dl.setStyleSheet("background-color: #5555ff; color: white;")
+                btn_dl.clicked.connect(lambda checked, f=filename: self.download_knowledge_file(f))
+                self.table_knowledge.setCellWidget(row, 1, btn_dl)
+                
                 # Delete button
                 btn_del = QPushButton("Excluir")
                 btn_del.setStyleSheet("background-color: #ff5555; color: white;")
-                
-                # Fix closure bug with default argument f=filename
                 btn_del.clicked.connect(lambda checked, f=filename: self.delete_knowledge_file(f))
-                self.table_knowledge.setCellWidget(row, 1, btn_del)
+                self.table_knowledge.setCellWidget(row, 2, btn_del)
 
         future = self.async_worker.submit(do_list())
         self._monitor_future(future, update_table)
@@ -832,6 +1012,23 @@ class MainWindow(QMainWindow):
                 self.refresh_knowledge_list()
             else:
                 QMessageBox.warning(self, "Erro", f"Falha ao excluir: {res.get('error')}")
+
+    def download_knowledge_file(self, filename):
+        """Allow user to save the original file to a new location."""
+        import shutil
+        source_path = os.path.join(os.getcwd(), "arquivos", filename)
+        
+        if not os.path.exists(source_path):
+            QMessageBox.warning(self, "Não Encontrado", f"O arquivo original '{filename}' não foi encontrado na pasta 'arquivos'.")
+            return
+            
+        target_path, _ = QFileDialog.getSaveFileName(self, "Salvar Arquivo Como", filename)
+        if target_path:
+            try:
+                shutil.copy2(source_path, target_path)
+                QMessageBox.information(self, "Sucesso", f"Arquivo salvo com sucesso em:\n{target_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Erro", f"Falha ao copiar arquivo: {e}")
 
         future = self.async_worker.submit(do_delete())
         self._monitor_future(future, on_deleted)

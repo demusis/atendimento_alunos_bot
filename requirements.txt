@@ -11,7 +11,7 @@ langchain-chroma>=0.1.0
 langchain-core>=0.2.0
 requests>=2.31.0
 PyQt6==6.7.1; sys_platform == 'win32'
-pysqlite3-binary; sys_platform == 'linux'
+# pysqlite3-binary is handled by install_rp4.sh for ARM compatibility
 psutil>=5.9.0
 GPUtil>=1.4.0
 speedtest-cli>=2.1.3

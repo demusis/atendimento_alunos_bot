@@ -1,13 +1,20 @@
 import os
 import sys
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # SQLite patch for Linux (needed for ChromaDB on some Raspberry Pi versions)
 if sys.platform == "linux":
     try:
         import pysqlite3 as sqlite3
         sys.modules["sqlite3"] = sqlite3
+        logger.info(f"Usando pysqlite3 (SQLite {sqlite3.sqlite_version})")
     except ImportError:
-        pass
+        import sqlite3
+        logger.info(f"pysqlite3 não disponível. Usando sqlite3 nativo (SQLite {sqlite3.sqlite_version})")
 
 import shutil
 from typing import List, Optional, Dict, Any
@@ -147,7 +154,9 @@ class VectorStoreRepository:
             
             # Add to Vector Store
             if self.vector_store:
+                logger.info(f"Adicionando {len(splits)} fragmentos ao Vector Store...")
                 self.vector_store.add_documents(documents=splits)
+                logger.info(f"Ingestão de '{os.path.basename(file_path)}' concluída com sucesso.")
                 return {
                     "status": "success",
                     "chunks_count": len(splits),

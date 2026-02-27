@@ -41,9 +41,42 @@ def main():
         )
 
         if action == "ingest":
-            file_path = data["file_path"]
-            result = repo.ingest_file(file_path)
-            print(json.dumps({"ok": True, "result": result}))
+            file_paths = data.get("file_paths")
+            if file_paths is None:
+                file_paths = [data.get("file_path")]
+            
+            results = []
+            errors = []
+            for fp in file_paths:
+                if not fp:
+                    continue
+                try:
+                    res = repo.ingest_file(fp)
+                    results.append(res)
+                except Exception as e:
+                    errors.append(f"{os.path.basename(fp)}: {str(e)}")
+            
+            if not results and errors:
+                print(json.dumps({"ok": False, "error": " | ".join(errors)}))
+                return
+                
+            total_chunks = sum(r.get("chunks_count", 0) for r in results)
+            
+            if len(results) == 1:
+                filename_display = results[0].get("filename", "")
+            else:
+                filename_display = f"{len(results)} arquivos"
+                
+            if errors:
+                filename_display += f" (com Falhas em {len(errors)})"
+                
+            print(json.dumps({
+                "ok": True, 
+                "result": {
+                    "chunks_count": total_chunks,
+                    "filename": filename_display
+                }
+            }))
 
         elif action == "query":
             query_text = data["query"]

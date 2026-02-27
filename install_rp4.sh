@@ -48,6 +48,25 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
+# 3.5 Instalar pysqlite3 (necessário para ChromaDB em algumas distros)
+echo -e "🔧 3.5. Verificando compatibilidade do SQLite..."
+SQLITE_VERSION=$(python3 -c "import sqlite3; print(sqlite3.sqlite_version)" 2>/dev/null)
+SQLITE_MAJOR=$(echo "$SQLITE_VERSION" | cut -d. -f1)
+SQLITE_MINOR=$(echo "$SQLITE_VERSION" | cut -d. -f2)
+
+if [ "$SQLITE_MAJOR" -ge 3 ] && [ "$SQLITE_MINOR" -ge 35 ]; then
+    echo "✅ SQLite $SQLITE_VERSION é compatível com ChromaDB. pysqlite3 não é necessário."
+else
+    echo "⚠️ SQLite $SQLITE_VERSION pode ser antigo. Tentando instalar pysqlite3..."
+    if pip install pysqlite3-binary 2>/dev/null; then
+        echo "✅ pysqlite3-binary instalado com sucesso."
+    else
+        echo "⚠️ pysqlite3-binary não disponível para esta plataforma. Compilando pysqlite3 do fonte..."
+        pip install pysqlite3 2>/dev/null && echo "✅ pysqlite3 compilado com sucesso." || \
+            echo "❌ Falha ao instalar pysqlite3. O bot pode não funcionar corretamente com ChromaDB."
+    fi
+fi
+
 # 4. Criar diretório do Banco de Dados e ajustar permissões
 echo -e "⚙️ 4. Configurando diretório do Banco de Dados..."
 mkdir -p db_atendimento

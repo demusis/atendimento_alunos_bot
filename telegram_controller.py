@@ -138,10 +138,10 @@ class TelegramBotController:
                     input=worker_data,
                     capture_output=True, text=True,
                     cwd=os.path.dirname(os.path.abspath(__file__)),
-                    timeout=45 # 45 seconds timeout for any DB operation
+                    timeout=180 # 180 seconds timeout for any DB operation
                 )
             except subprocess.TimeoutExpired:
-                 logger.error(f"ChromaDB worker timed out after 45s (Action: {action_data.get('action')})")
+                 logger.error(f"ChromaDB worker timed out after 180s (Action: {action_data.get('action')})")
                  raise RuntimeError("Base de dados demorou muito para responder")
             if result.returncode != 0:
                 error_msg = result.stderr.strip() if result.stderr else "Processo encerrado inesperadamente"
@@ -257,7 +257,7 @@ class TelegramBotController:
                 "• /ia <code>[modelo]</code> - Lista ou troca modelo de chat\n"
                 "• /embedding <code>[modelo]</code> - Lista/Troca modelo de busca\n"
                 "• /conhecimento <code>[texto]</code> - Ingestão direta de texto\n"
-                "• /listar - Lista documentos na base vetorial\n"
+                "• /listar - Lista e permite ⬇️ baixar arquivos da base\n"
                 "• /remover <code>[nome]</code> - Remove arquivo da base\n"
                 "• /limpar - Reseta totalmente o banco de dados\n"
                 "• /prompt <code>[texto]</code> - Vê/Edita instruções da IA\n"
@@ -320,9 +320,35 @@ class TelegramBotController:
                 if not result:
                     await status_msg.edit_text("A base de conhecimento está vazia.")
                 else:
-                    files_list = "\n".join([f"- {f}" for f in result])
+                    keyboard = []
+                    # Files that actually exist in 'arquivos' for download
+                    arquivos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arquivos")
+                    local_files = os.listdir(arquivos_dir) if os.path.exists(arquivos_dir) else []
+                    
+                    for f in result:
+                        # Check if file exists in 'arquivos' folder
+                        file_exists = f in local_files
+                        
+                        row = []
+                        if file_exists:
+                            # Callback data limit is 64 bytes. Filenames usually fit.
+                            # We use btn_dl_ prefix (7 chars).
+                            if len(f.encode('utf-8')) <= 55:
+                                row.append(InlineKeyboardButton(f"⬇️ {f}", callback_data=f"btn_dl_{f}"))
+                            else:
+                                # Truncate gracefully if name is too long for callback_data
+                                short_name = f[:50]
+                                row.append(InlineKeyboardButton(f"⬇️ {f[:30]}...", callback_data=f"btn_dl_{short_name}"))
+                        else:
+                            row.append(InlineKeyboardButton(f"📄 {f} (Remoto/Indisponível)", callback_data="ignore"))
+                        
+                        keyboard.append(row)
+                    
+                    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
                     await status_msg.edit_text(
-                        f"<b>Arquivos na base de conhecimento:</b>\n\n{files_list}",
+                        f"<b>📚 Base de Conhecimento ({len(result)} arquivos):</b>\n\n"
+                        "Clique em um arquivo abaixo para baixar o documento original.",
+                        reply_markup=reply_markup,
                         parse_mode="HTML"
                     )
             else:
@@ -937,10 +963,11 @@ class TelegramBotController:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_name = f"mensagem_{timestamp}.txt"
             
-            # Temporary path for ingestion
-            temp_path = os.path.join(os.getcwd(), "temp_ingest")
-            os.makedirs(temp_path, exist_ok=True)
-            file_path = os.path.join(temp_path, file_name)
+            # Save permanently to 'arquivos' for later download support
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            target_path = os.path.join(base_dir, "arquivos")
+            os.makedirs(target_path, exist_ok=True)
+            file_path = os.path.join(target_path, file_name)
             
             # Save text to file
             with open(file_path, "w", encoding="utf-8") as f:
@@ -962,10 +989,6 @@ class TelegramBotController:
             )
             logger.info(f"Texto direto adicionado à base: {file_name}")
             
-            # Cleanup temp file
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                
         except Exception as e:
             logger.error(f"Erro no /conhecimento: {e}")
             await status_msg.edit_text(f"❌ Erro ao injetar texto: {e}")
@@ -977,20 +1000,26 @@ class TelegramBotController:
         await update.message.reply_text(f"Seu ID do Telegram é: <code>{update.effective_user.id}</code>", parse_mode="HTML")
 
     def _get_menu_keyboard(self) -> InlineKeyboardMarkup:
-        """Return the standard menu keyboard."""
-        keyboard = [
-            [
-                InlineKeyboardButton("Horário", callback_data="btn_horarios"),
-                InlineKeyboardButton("Cronograma", callback_data="btn_cronogramas"),
-            ],
-            [
-                InlineKeyboardButton("Materiais", callback_data="btn_materiais"),
-                InlineKeyboardButton("FAQ", callback_data="btn_faq"),
-            ],
-            [
-                InlineKeyboardButton("Falar com o Professor", callback_data="btn_professor"),
-            ]
-        ]
+        """Return the standard menu keyboard built from config."""
+        buttons_config = self.config_manager.get("menu_buttons", [])
+        
+        keyboard = []
+        current_row = []
+        
+        for btn in buttons_config:
+            if not btn.get("enabled", True):
+                continue
+                
+            current_row.append(InlineKeyboardButton(btn["text"], callback_data=f"dyn_{btn['id']}"))
+            
+            # Max 2 buttons per row for better UX on mobile
+            if len(current_row) >= 2:
+                keyboard.append(current_row)
+                current_row = []
+        
+        if current_row:
+            keyboard.append(current_row)
+            
         return InlineKeyboardMarkup(keyboard)
 
     def _check_rate_limit(self, user_id: int) -> bool:
@@ -1209,17 +1238,16 @@ class TelegramBotController:
             
         data = query.data
 
-        # --- User Buttons ---
-        if data == "btn_horarios":
-            await self._show_horarios(query)
-        elif data == "btn_cronogramas":
-            await self._show_cronogramas(query)
-        elif data == "btn_materiais":
-            await self._show_materials(query)
-        elif data == "btn_faq":
-            await self._show_faq_content(query.message)
-            await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
-        elif data == "btn_professor":
+        # --- Dynamic Buttons ---
+        if data.startswith("dyn_"):
+            btn_id = data[4:]
+            buttons_config = self.config_manager.get("menu_buttons", [])
+            btn_data = next((b for b in buttons_config if b["id"] == btn_id), None)
+            
+            if btn_data:
+                await self._execute_button_action(query, btn_data)
+                return
+        elif data == "btn_prof_old":
              await query.edit_message_text(
                  text="<b>Prof. Carlo Ralph De Musis</b>\n\n"
                       "Telegram: @carlodemusis\n"
@@ -1243,6 +1271,110 @@ class TelegramBotController:
         elif data.startswith("btn_summary_"):
             count = int(data.split("_")[2])
             await self._generate_ai_summary(query, count)
+            
+        elif data.startswith("btn_dl_"):
+            filename = data[7:]
+            await self._download_document_file(query, filename)
+
+    async def _execute_button_action(self, query, btn_data: Dict[str, Any]) -> None:
+        """Execute the action defined for a dynamic button."""
+        action = btn_data.get("action")
+        param = btn_data.get("parameter", "")
+        btn_text = btn_data.get("text", "Opção")
+
+        if action == "fixed_text":
+            try:
+                await query.edit_message_text(text=param, parse_mode="HTML")
+            except Exception:
+                await query.edit_message_text(text=param)
+            await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
+
+        elif action == "text_file":
+            await query.edit_message_text(text=f"Buscando informações sobre {btn_text.lower()}...")
+            try:
+                arquivos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arquivos")
+                file_path = os.path.join(arquivos_dir, param)
+                
+                if not os.path.exists(file_path):
+                    await query.edit_message_text(
+                        text=f"Erro: Arquivo <code>{param}</code> não encontrado.",
+                        parse_mode="HTML"
+                    )
+                    return
+
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                if not content.strip():
+                    await query.edit_message_text(text=f"O arquivo {param} está vazio.")
+                    return
+
+                await query.edit_message_text(
+                    text=f"<b>{btn_text}</b>\n\n{content}",
+                    parse_mode="HTML"
+                )
+                await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
+            except Exception as e:
+                logger.error(f"Erro ao ler arquivo {param}: {e}")
+                await query.edit_message_text(text=f"Erro ao processar {btn_text.lower()}: {e}")
+
+        elif action == "file_upload":
+            await query.edit_message_text(text=f"Buscando arquivos de {btn_text.lower()}...")
+            try:
+                arquivos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arquivos")
+                if not os.path.exists(arquivos_dir):
+                    await query.edit_message_text(text="Pasta de arquivos não encontrada.")
+                    return
+                
+                # Parameter should be the prefix, e.g., 'horario'
+                files = [f for f in os.listdir(arquivos_dir) if f.lower().startswith(param.lower())]
+                
+                if not files:
+                    await query.edit_message_text(text=f"Nenhum arquivo de {btn_text.lower()} disponível.")
+                    return
+
+                await query.edit_message_text(text=f"Encontrei {len(files)} arquivo(s). Enviando...")
+                
+                for filename in files:
+                    file_path = os.path.join(arquivos_dir, filename)
+                    with open(file_path, 'rb') as f:
+                        await query.message.reply_document(
+                            document=f,
+                            filename=filename,
+                            caption=f"📄 {filename}"
+                        )
+                
+                await query.message.reply_text("Selecione outra opção ou digite sua dúvida:", reply_markup=self._get_menu_keyboard())
+            except Exception as e:
+                logger.error(f"Erro ao buscar arquivos prefixo {param}: {e}")
+                await query.edit_message_text(text=f"Erro ao processar {btn_text.lower()}: {e}")
+
+    async def _download_document_file(self, query, filename: str) -> None:
+        """Send a document file to the user."""
+        try:
+            arquivos_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "arquivos")
+            file_path = os.path.join(arquivos_dir, filename)
+            
+            if not os.path.exists(file_path):
+                # Check for truncated filename in callback_data
+                potential_files = os.listdir(arquivos_dir)
+                match = next((f for f in potential_files if f.startswith(filename)), None)
+                if match:
+                    file_path = os.path.join(arquivos_dir, match)
+                    filename = match
+                else:
+                    await query.message.reply_text(f"❌ O arquivo original <code>{filename}</code> não foi encontrado no servidor.", parse_mode="HTML")
+                    return
+
+            with open(file_path, 'rb') as f:
+                await query.message.reply_document(
+                    document=f,
+                    filename=filename,
+                    caption=f"📄 {filename} (Download Solicitado)"
+                )
+        except Exception as e:
+            logger.error(f"Erro ao baixar arquivo {filename}: {e}")
+            await query.message.reply_text(f"❌ Erro ao baixar arquivo: {e}")
 
     async def _cmd_admin_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Help for admin ingestion."""
@@ -1413,16 +1545,17 @@ class TelegramBotController:
         
         await update.message.reply_text(f"📥 Recebendo {file_name}...") # type: ignore
         
-        # Save to temp
-        temp_path = os.path.join(os.getcwd(), "temp_ingest")
-        os.makedirs(temp_path, exist_ok=True)
-        file_path = os.path.join(temp_path, file_name)
+        # Save permanently to 'arquivos' for later download support
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        target_path = os.path.join(base_dir, "arquivos")
+        os.makedirs(target_path, exist_ok=True)
+        file_path = os.path.join(target_path, file_name)
         
         await file.download_to_drive(file_path)
         
         # Ingest via subprocess worker
         try:
-            await update.message.reply_text("⚙️ Processando...") # type: ignore
+            await update.message.reply_text("⚙️ Processando e Indexando...") # type: ignore
             
             result = await self._run_chroma_worker({
                 "action": "ingest",
@@ -1430,7 +1563,7 @@ class TelegramBotController:
             })
             
             chunks = result.get('chunks_count', 0)
-            await update.message.reply_text(f"✅ Sucesso! {chunks} fragmentos adicionados à base.") # type: ignore
+            await update.message.reply_text(f"✅ Sucesso! {chunks} fragmentos adicionados.\nO arquivo agora está disponível para baixar no menu /listar.") # type: ignore
         except Exception as e:
             import traceback
             logger.error(f"Erro na ingestão do arquivo: {type(e).__name}: {e}")
@@ -1439,10 +1572,7 @@ class TelegramBotController:
                 await update.message.reply_text(f"❌ Erro ao processar: {e}") # type: ignore
             except Exception:
                 pass  # Prevent reply failure from propagating
-        finally:
-            # Cleanup
-            if os.path.exists(file_path):
-                os.remove(file_path)
+        # No cleanup (remove) here, we want to keep it in 'arquivos'
 
     async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """

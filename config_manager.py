@@ -40,6 +40,16 @@ class ConfigurationManager:
             self._create_default_config()
         else:
             self._load_config()
+            # Migration/Check: ensure mandatory keys exist
+            if "menu_buttons" not in self._config_data:
+                self._config_data["menu_buttons"] = [
+                    {"id": "btn1", "enabled": True, "text": "Horário", "action": "file_upload", "parameter": "horario"},
+                    {"id": "btn2", "enabled": True, "text": "Cronograma", "action": "file_upload", "parameter": "cronograma"},
+                    {"id": "btn3", "enabled": True, "text": "Materiais", "action": "text_file", "parameter": "materiais.txt"},
+                    {"id": "btn4", "enabled": True, "text": "FAQ", "action": "text_file", "parameter": "faq.txt"},
+                    {"id": "btn5", "enabled": True, "text": "Falar com o Professor", "action": "fixed_text", "parameter": "Prof. Carlo Ralph De Musis\n\nTelegram: @carlodemusis\nTelefone: (65) 9 9262-5221\nE-mail: carlo.demusis@gmail.com"}
+                ]
+                self._save_config()
 
     def _create_default_config(self) -> None:
         """
@@ -68,7 +78,14 @@ class ConfigurationManager:
             "chat_history_size": 5,
             "rate_limit_per_minute": 10,
             "chroma_dir": "db_atendimento",
-            "log_verbosity": "médio"
+            "log_verbosity": "médio",
+            "menu_buttons": [
+                {"id": "btn1", "enabled": True, "text": "Horário", "action": "file_upload", "parameter": "horario"},
+                {"id": "btn2", "enabled": True, "text": "Cronograma", "action": "file_upload", "parameter": "cronograma"},
+                {"id": "btn3", "enabled": True, "text": "Materiais", "action": "text_file", "parameter": "materiais.txt"},
+                {"id": "btn4", "enabled": True, "text": "FAQ", "action": "text_file", "parameter": "faq.txt"},
+                {"id": "btn5", "enabled": True, "text": "Falar com o Professor", "action": "fixed_text", "parameter": "Prof. Carlo Ralph De Musis\n\nTelegram: @carlodemusis\nTelefone: (65) 9 9262-5221\nE-mail: carlo.demusis@gmail.com"}
+            ]
         }
         self._config_data = default_config
         self._save_config()

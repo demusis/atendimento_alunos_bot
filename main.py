@@ -1,15 +1,21 @@
 import sys
 import os
-import logging
-import argparse
-import asyncio
-from telegram_controller import TelegramBotController
+import multiprocessing
 
-# Handle worker mode for PyInstaller frozen app
+# Handle worker mode for PyInstaller frozen app early to avoid heavy imports
 if "--worker" in sys.argv:
     import ingest_worker
     ingest_worker.main()
     sys.exit(0)
+
+# Essential for Windows exes using multiprocessing anywhere in the stack
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+
+import logging
+import argparse
+import asyncio
+from telegram_controller import TelegramBotController
 
 # Configure logging levels based on verbosity
 from config_manager import ConfigurationManager
