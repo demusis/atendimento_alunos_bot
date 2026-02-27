@@ -54,6 +54,9 @@ class TelegramBotController:
         # Feature: Scheduled Reminders
         self._reminders_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reminders.json")
         self._reminders: List[Dict[str, Any]] = self._load_reminders()
+        
+        # Bot username (populated after start)
+        self._bot_username: str = ""
 
     @staticmethod
     def _clean_markdown(text: str) -> str:
@@ -216,6 +219,10 @@ class TelegramBotController:
         
         # Initialize and Start
         await self.application.initialize()
+        
+        # Store bot username for group mention detection
+        bot_info = await self.application.bot.get_me()
+        self._bot_username = (bot_info.username or "").lower()
         
         # Load Scheduled Jobs
         self._setup_reminder_jobs()
@@ -1675,6 +1682,20 @@ class TelegramBotController:
 
         user_query = update.message.text
         user_id = update.effective_user.id
+        
+        # Group chat: only respond when mentioned with @
+        chat_type = update.effective_chat.type if update.effective_chat else "private"
+        if chat_type in ("group", "supergroup"):
+            bot_mention = f"@{self._bot_username}"
+            if bot_mention and bot_mention.lower() not in user_query.lower():
+                return  # Not mentioned in group, ignore
+            # Strip the mention from the query
+            import re
+            user_query = re.sub(rf'@{re.escape(self._bot_username)}', '', user_query, flags=re.IGNORECASE).strip()
+            if not user_query:
+                await update.message.reply_text("Por favor, digite sua dúvida após me mencionar. Exemplo:\n<code>@{} Qual o horário de atendimento?</code>".format(self._bot_username), parse_mode="HTML")
+                return
+        
         logger.info(f"Mensagem recebida: {user_query}")
         
         # Feature 3: Rate Limiting
