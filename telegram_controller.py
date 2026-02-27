@@ -1346,8 +1346,12 @@ class TelegramBotController:
         
         elif data == "btn_confirm_clear_history":
             if self.analytics.clear_history():
-                await query.edit_message_text("✅ <b>Histórico de interações apagado com sucesso.</b>", parse_mode="HTML")
-                logger.info("Histórico de interações limpo pelo administrador.")
+                # Reset in-memory user tracking so everyone is "new" again
+                self._known_users.clear()
+                self._chat_history.clear()
+                self._user_last_greeting.clear()
+                await query.edit_message_text("✅ <b>Histórico de interações apagado com sucesso.</b>\nTodos os alunos serão tratados como novos na próxima interação.", parse_mode="HTML")
+                logger.info("Histórico de interações limpo pelo administrador. known_users resetado.")
             else:
                 await query.edit_message_text("❌ Falha ao limpar o histórico.")
                 
