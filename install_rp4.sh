@@ -78,7 +78,7 @@ if [ ! -f "config.json" ]; then
     cp config_example.json config.json
     # Ajusta o caminho do chroma_dir no config.json para o caminho absoluto atual
     FULL_PATH=$(pwd)/db_atendimento
-    sed -i "s|\"chroma_dir\": .*|\"chroma_dir\": \"$FULL_PATH\"|g" config.json
+    sed -i "s|\"chroma_dir\": .*|\"chroma_dir\": \"$FULL_PATH\",|g" config.json
 fi
 
 # 6. Ajustar permissões e preparativos finais
