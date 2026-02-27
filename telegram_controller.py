@@ -39,6 +39,12 @@ class TelegramBotController:
         self._is_running = False
         self._user_last_greeting: Dict[int, str] = {}  # user_id -> 'YYYY-MM-DD'
         
+        # Watchdog: track uptime
+        self._start_time = time.time()
+        
+        # Known users set (for first-time user detection)
+        self._known_users: set = set(self.analytics.get_unique_users())
+        
         # Feature 1: Per-user chat history
         self._chat_history: Dict[int, deque] = {}  # user_id -> deque of (question, answer)
         
@@ -193,6 +199,7 @@ class TelegramBotController:
         self.application.add_handler(CommandHandler("speedtest", self._cmd_speedtest))
         self.application.add_handler(CommandHandler("ping_ia", self._cmd_ping_ia))
         self.application.add_handler(CommandHandler("atualizar", self._cmd_update))
+        self.application.add_handler(CommandHandler("saude", self._cmd_saude))
         # Admin commands
         self.application.add_handler(CommandHandler("bd", self._cmd_admin_help))
         self.application.add_handler(CommandHandler("limpar", self._cmd_clear_database))
@@ -280,7 +287,8 @@ class TelegramBotController:
                 "• /limpar_historico - Zera os logs de interações\n"
                 "• /ping_ia - Latência (Ollama vs OpenRouter)\n"
                 "• /atualizar - Git Pull + Update dependencies\n"
-                "• /reiniciar_bot - Reinicia o processo do bot\n\n"
+                "• /reiniciar_bot - Reinicia o processo do bot\n"
+                "• /saude - Verifica se o bot está vivo (uptime)\n\n"
                 
                 "📊 <b>Análise & Identidade:</b>\n"
                 "• /estatisticas - Dashboard de uso geral\n"
@@ -788,6 +796,35 @@ class TelegramBotController:
                         logger.warning(f"Não foi possível notificar admin {admin_id}: {e}")
         except Exception as e:
             logger.error(f"Erro ao verificar flag de atualização: {e}")
+
+    async def _cmd_saude(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/saude - Health check with uptime."""
+        if not update.message: return
+        if not self._is_admin(update): return
+        
+        uptime_seconds = int(time.time() - self._start_time)
+        days = uptime_seconds // 86400
+        hours = (uptime_seconds % 86400) // 3600
+        minutes = (uptime_seconds % 3600) // 60
+        
+        if days > 0:
+            uptime_str = f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            uptime_str = f"{hours}h {minutes}m"
+        else:
+            uptime_str = f"{minutes}m"
+        
+        known_count = len(self._known_users)
+        
+        await update.message.reply_text(
+            "💚 <b>Bot Operacional</b>\n\n"
+            f"⏱️ <b>Uptime:</b> <code>{uptime_str}</code>\n"
+            f"👥 <b>Usuários conhecidos:</b> <code>{known_count}</code>\n"
+            f"📡 <b>Polling:</b> ✅ Ativo\n"
+            f"🤖 <b>Provedor IA:</b> <code>{self.config_manager.get('ai_provider', 'N/A')}</code>\n\n"
+            "<i>Se você recebeu esta mensagem, o bot está vivo e respondendo.</i>",
+            parse_mode="HTML"
+        )
 
     # --- Reminder System ---
 
@@ -1715,12 +1752,31 @@ class TelegramBotController:
                     context.args = parts[1:] if len(parts) > 1 else []
                     return await self._cmd_add_reminder(update, context)
         
+        # Welcome message for first-time users
+        if user_id not in self._known_users:
+            self._known_users.add(user_id)
+            user_name = update.effective_user.first_name or "Aluno(a)"
+            await update.message.reply_text(
+                f"👋 <b>Olá, {user_name}! Seja bem-vindo(a)!</b>\n\n"
+                "Sou o assistente virtual do Professor e estou aqui para ajudá-lo(a) "
+                "com dúvidas sobre as disciplinas, horários, materiais e muito mais.\n\n"
+                "💡 <b>Como me usar:</b>\n"
+                "• Envie sua dúvida diretamente por texto\n"
+                "• Use os botões do menu abaixo para acesso rápido\n"
+                "• Digite /ajuda para ver todos os comandos\n\n"
+                "Vamos lá! Como posso ajudá-lo(a)?",
+                parse_mode="HTML",
+                reply_markup=self._get_menu_keyboard()
+            )
+        
         # Auto-show /start on first message of the day
         import datetime
         today_str = datetime.date.today().isoformat()
         if self._user_last_greeting.get(user_id) != today_str:
             self._user_last_greeting[user_id] = today_str
-            await self._send_start_menu(update)
+            # Skip start menu if already sent welcome above
+            if user_id in self._known_users:
+                await self._send_start_menu(update)
         
         # 1. Retrieve Context
         try:

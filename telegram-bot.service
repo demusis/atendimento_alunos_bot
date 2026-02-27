@@ -5,11 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/atendimento_alunos_bot
-ExecStart=/home/pi/atendimento_alunos_bot/venv/bin/python3 main.py --cli
-Restart=on-failure
-RestartSec=10
+User=uach
+WorkingDirectory=/home/uach/atendimento_alunos_bot
+ExecStart=/home/uach/atendimento_alunos_bot/start_rp4.sh
+Restart=always
+RestartSec=30
 StandardOutput=journal
 StandardError=journal
 
