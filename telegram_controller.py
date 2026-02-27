@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import os
+import json
 import time
 from typing import Optional, Dict, Any, List
 from collections import deque
@@ -554,7 +555,7 @@ class TelegramBotController:
                 return ("❌ Offline", "N/A")
 
         async def get_sys_metrics():
-            import socket, platform
+            import platform
             hostname = platform.node()
             try:
                 import psutil
@@ -934,7 +935,7 @@ class TelegramBotController:
         try:
             self.config_manager.set("system_prompt", new_prompt)
             await update.message.reply_text("✅ **System Prompt atualizado com sucesso!**")
-            logger.info(f"System Prompt alterado pelo admin.")
+            logger.info("System Prompt alterado pelo admin.")
         except Exception as e:
             logger.error(f"Erro ao atualizar prompt: {e}")
             await update.message.reply_text(f"❌ Erro ao salvar prompt: {e}")
@@ -1513,10 +1514,10 @@ class TelegramBotController:
                 return
 
             try:
-                await query.edit_message_text(text=f"📊 **Relatório IA ({days} dias)**\n\n{response_text}", parse_mode="Markdown")
+                await query.edit_message_text(text=f"📊 **Relatório IA ({count} interações)**\n\n{response_text}", parse_mode="Markdown")
             except Exception as markdown_err:
                 logger.warning(f"Failed to send summary with Markdown, falling back to plain text: {markdown_err}")
-                await query.edit_message_text(text=f"📊 Relatório IA ({days} dias)\n\n{response_text}")
+                await query.edit_message_text(text=f"📊 Relatório IA ({count} interações)\n\n{response_text}")
                 
         except Exception as e:
             import traceback

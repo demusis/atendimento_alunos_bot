@@ -2,7 +2,7 @@ import json
 import os
 import hashlib
 from datetime import datetime
-from typing import Optional
+
 
 class AnalyticsManager:
     """

@@ -1,20 +1,18 @@
-import sys
 import os
 import asyncio
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
-    QTextEdit, QPushButton, QLabel, QFileDialog, QProgressBar, 
+    QTextEdit, QPushButton, QLabel, QFileDialog, 
     QLineEdit, QFormLayout, QDoubleSpinBox, QSpinBox, QMessageBox,
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QCheckBox, QScrollArea, QGroupBox
 )
 from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import pyqtSlot, Qt, QTimer
+from PyQt6.QtCore import pyqtSlot, QTimer
 from config_manager import ConfigurationManager
 from log_observer import LogObserver
 from async_worker import AsyncBridgeWorker
 from telegram_controller import TelegramBotController
-from rag_repository import VectorStoreRepository
 from ollama_client import OllamaAdapter
 
 class MainWindow(QMainWindow):
@@ -1013,6 +1011,9 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "Erro", f"Falha ao excluir: {res.get('error')}")
 
+        future = self.async_worker.submit(do_delete())
+        self._monitor_future(future, on_deleted)
+
     def download_knowledge_file(self, filename):
         """Allow user to save the original file to a new location."""
         import shutil
@@ -1029,7 +1030,4 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Sucesso", f"Arquivo salvo com sucesso em:\n{target_path}")
             except Exception as e:
                 QMessageBox.critical(self, "Erro", f"Falha ao copiar arquivo: {e}")
-
-        future = self.async_worker.submit(do_delete())
-        self._monitor_future(future, on_deleted)
 

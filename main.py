@@ -104,7 +104,7 @@ def main():
         sys.exit(app.exec())
         
     except Exception as e:
-        print(f"\n⚠️  Aviso: Não foi possível iniciar a interface gráfica.")
+        print("\n⚠️  Aviso: Não foi possível iniciar a interface gráfica.")
         print(f"Erro: {e}")
         print("-" * 50)
         print("Acionando MODO CLI automaticamente...")

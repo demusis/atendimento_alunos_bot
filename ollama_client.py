@@ -1,7 +1,7 @@
 import re
 import requests
 import json
-from typing import Dict, Any, Generator, Optional
+from typing import Generator
 
 class OllamaAdapter:
     """
