@@ -1,15 +1,20 @@
 [Unit]
 Description=Assistente Acadêmico Telegram Bot
-After=network-online.target
+After=network-online.target ollama.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=uach
 WorkingDirectory=/home/uach/atendimento_alunos_bot
+ExecStartPre=/bin/sleep 15
 ExecStart=/home/uach/atendimento_alunos_bot/start_rp4.sh
 Restart=always
 RestartSec=30
+StartLimitBurst=5
+StartLimitIntervalSec=300
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/uach/.local/bin"
+Environment="LANG=pt_BR.UTF-8"
 StandardOutput=journal
 StandardError=journal
 

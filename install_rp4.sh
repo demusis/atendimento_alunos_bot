@@ -89,16 +89,27 @@ chmod +x start_rp4.sh
 echo -e "🔄 7. Configurando inicialização automática..."
 SERVICE_FILE="telegram-bot.service"
 if [ -f "$SERVICE_FILE" ]; then
-    # Ajustar caminhos no arquivo de serviço
+    # Ajustar caminhos no arquivo de serviço para o diretório e usuário atuais
     CURRENT_DIR=$(pwd)
     CURRENT_USER=$(whoami)
-    sed "s|/home/pi/atendimento_alunos_bot|$CURRENT_DIR|g; s|User=pi|User=$CURRENT_USER|g" \
+    sed -e "s|WorkingDirectory=.*|WorkingDirectory=$CURRENT_DIR|g" \
+        -e "s|ExecStart=.*|ExecStart=$CURRENT_DIR/start_rp4.sh|g" \
+        -e "s|User=.*|User=$CURRENT_USER|g" \
+        -e "s|/home/[^/]*/\.local/bin|/home/$CURRENT_USER/.local/bin|g" \
         "$SERVICE_FILE" > /tmp/telegram-bot.service
     sudo cp /tmp/telegram-bot.service /etc/systemd/system/telegram-bot.service
     sudo systemctl daemon-reload
     sudo systemctl enable telegram-bot.service
-    echo -e "${GREEN}✅ Serviço systemd instalado! O bot iniciará automaticamente no boot.${NC}"
+    echo -e "${GREEN}✅ Serviço systemd instalado e habilitado!${NC}"
+    echo "   O bot iniciará AUTOMATICAMENTE no boot, sem precisar logar."
     echo "   Para gerenciar: sudo systemctl {start|stop|restart|status} telegram-bot"
+    
+    # Verificar se está realmente habilitado
+    if systemctl is-enabled telegram-bot.service &>/dev/null; then
+        echo -e "${GREEN}   ✅ Confirmado: serviço habilitado para auto-start.${NC}"
+    else
+        echo -e "${RED}   ❌ ERRO: serviço NÃO foi habilitado. Verifique manualmente.${NC}"
+    fi
 else
     echo -e "${RED}⚠️ Arquivo telegram-bot.service não encontrado. Auto-start não configurado.${NC}"
 fi
