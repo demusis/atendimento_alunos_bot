@@ -13,6 +13,7 @@ reminders.json
 chroma_db/
 temp_ingest/
 *.log
+.update_restart
 
 # IDEs
 .vscode/

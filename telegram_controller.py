@@ -216,6 +216,9 @@ class TelegramBotController:
         await self.application.start()
         await self.application.updater.start_polling() # type: ignore
         
+        # Notify admin if this is a restart after /atualizar
+        await self._check_update_restart()
+        
         # Keep running until stopped
         while self._is_running:
             await asyncio.sleep(1)
@@ -743,9 +746,48 @@ class TelegramBotController:
             
             await status_msg.edit_text("✅ Tudo pronto! Reiniciando processo...")
             await asyncio.sleep(2)
+            
+            # Create flag file so the bot knows to notify admin after restart
+            flag_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".update_restart")
+            with open(flag_path, 'w') as f:
+                f.write(res.stdout.strip())
+            
             os.execv(sys.executable, [sys.executable] + sys.argv)
         except Exception as e:
             await status_msg.edit_text(f"❌ Erro na atualização: {e}")
+
+    async def _check_update_restart(self) -> None:
+        """Check if the bot was restarted after /atualizar and notify admin."""
+        flag_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".update_restart")
+        if not os.path.exists(flag_path):
+            return
+        
+        try:
+            with open(flag_path, 'r') as f:
+                git_output = f.read().strip()
+            os.remove(flag_path)
+            
+            admin_ids_raw = self.config_manager.get("admin_id", "")
+            if not admin_ids_raw:
+                return
+            
+            msg = (
+                "✅ <b>Atualização concluída com sucesso!</b>\n\n"
+                f"<b>Git Pull:</b>\n<code>{git_output or 'Already up to date.'}</code>\n\n"
+                "O bot foi reiniciado e está operando normalmente."
+            )
+            
+            for admin_id in str(admin_ids_raw).split(","):
+                admin_id = admin_id.strip()
+                if admin_id:
+                    try:
+                        await self.application.bot.send_message(
+                            chat_id=int(admin_id), text=msg, parse_mode="HTML"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Não foi possível notificar admin {admin_id}: {e}")
+        except Exception as e:
+            logger.error(f"Erro ao verificar flag de atualização: {e}")
 
     # --- Reminder System ---
 
