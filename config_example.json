@@ -9,8 +9,49 @@
     "temperature": 0.7,
     "max_tokens": 2048,
     "ollama_url": "http://127.0.0.1:11434",
+    "ollama_embedding_model": "nomic-embed-text",
     "rag_k": 8,
-    "chroma_dir": "db_atendimento",
     "embedding_provider": "ollama",
-    "ollama_embedding_model": "nomic-embed-text:latest"
+    "openrouter_embedding_model": "qwen/qwen3-embedding-8b",
+    "chat_history_size": 5,
+    "rate_limit_per_minute": 10,
+    "chroma_dir": "db_atendimento",
+    "log_verbosity": "médio",
+    "menu_buttons": [
+        {
+            "id": "btn1",
+            "enabled": true,
+            "text": "Horário",
+            "action": "file_upload",
+            "parameter": "horario"
+        },
+        {
+            "id": "btn2",
+            "enabled": true,
+            "text": "Cronograma",
+            "action": "file_upload",
+            "parameter": "cronograma"
+        },
+        {
+            "id": "btn3",
+            "enabled": true,
+            "text": "Materiais",
+            "action": "text_file",
+            "parameter": "materiais.txt"
+        },
+        {
+            "id": "btn4",
+            "enabled": true,
+            "text": "FAQ",
+            "action": "text_file",
+            "parameter": "faq.txt"
+        },
+        {
+            "id": "btn5",
+            "enabled": true,
+            "text": "Falar com o Professor",
+            "action": "fixed_text",
+            "parameter": "Entre em contato pelo e-mail do professor."
+        }
+    ]
 }

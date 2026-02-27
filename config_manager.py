@@ -40,22 +40,21 @@ class ConfigurationManager:
             self._create_default_config()
         else:
             self._load_config()
-            # Migration/Check: ensure mandatory keys exist
-            if "menu_buttons" not in self._config_data:
-                self._config_data["menu_buttons"] = [
-                    {"id": "btn1", "enabled": True, "text": "Horário", "action": "file_upload", "parameter": "horario"},
-                    {"id": "btn2", "enabled": True, "text": "Cronograma", "action": "file_upload", "parameter": "cronograma"},
-                    {"id": "btn3", "enabled": True, "text": "Materiais", "action": "text_file", "parameter": "materiais.txt"},
-                    {"id": "btn4", "enabled": True, "text": "FAQ", "action": "text_file", "parameter": "faq.txt"},
-                    {"id": "btn5", "enabled": True, "text": "Falar com o Professor", "action": "fixed_text", "parameter": "Prof. Carlo Ralph De Musis\n\nTelegram: @carlodemusis\nTelefone: (65) 9 9262-5221\nE-mail: carlo.demusis@gmail.com"}
-                ]
-                self._save_config()
+            # Migration: ensure all default keys exist in loaded config
+            self._migrate_config()
 
     def _create_default_config(self) -> None:
         """
         Create the default configuration file with initial values.
         """
-        default_config = {
+        self._config_data = self._get_defaults()
+        self._save_config()
+
+    def _get_defaults(self) -> Dict[str, Any]:
+        """
+        Return the full dictionary of default configuration values.
+        """
+        return {
             "ai_provider": "ollama", # ollama or openrouter
             "telegram_token": "",
             "admin_id": "", # Telegram ID of the admin
@@ -87,8 +86,21 @@ class ConfigurationManager:
                 {"id": "btn5", "enabled": True, "text": "Falar com o Professor", "action": "fixed_text", "parameter": "Prof. Carlo Ralph De Musis\n\nTelegram: @carlodemusis\nTelefone: (65) 9 9262-5221\nE-mail: carlo.demusis@gmail.com"}
             ]
         }
-        self._config_data = default_config
-        self._save_config()
+
+    def _migrate_config(self) -> None:
+        """
+        Ensure all default keys exist in the loaded config.
+        Adds missing keys with default values without overwriting existing ones.
+        """
+        defaults = self._get_defaults()
+        updated = False
+        for key, value in defaults.items():
+            if key not in self._config_data:
+                self._config_data[key] = value
+                updated = True
+        if updated:
+            self._save_config()
+
 
     def _load_config(self) -> None:
         """
