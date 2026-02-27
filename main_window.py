@@ -262,6 +262,12 @@ class MainWindow(QMainWindow):
         layout.addRow("Limite de Mensagens:", self.input_rate_limit)
         layout.addRow("Diretório ChromaDB:", chroma_widget)
         
+        # Welcome Message
+        self.input_welcome_msg = QTextEdit()
+        self.input_welcome_msg.setMaximumHeight(100)
+        self.input_welcome_msg.setToolTip("Mensagem enviada automaticamente na primeira interação de cada aluno novo. Use {nome} para inserir o nome do aluno.")
+        layout.addRow("Mensagem de Boas-vindas:", self.input_welcome_msg)
+        
         # Setup Autosave
         self.setup_autosave()
         
@@ -356,6 +362,7 @@ class MainWindow(QMainWindow):
         self.input_chat_history.valueChanged.connect(self.trigger_autosave)
         self.input_rate_limit.valueChanged.connect(self.trigger_autosave)
         self.input_chroma_dir.textChanged.connect(self.trigger_autosave)
+        self.input_welcome_msg.textChanged.connect(self.trigger_autosave)
 
     def toggle_provider_ui(self, provider: str):
         """Show/Hide fields based on provider."""
@@ -442,6 +449,7 @@ class MainWindow(QMainWindow):
         updates["chat_history_size"] = self.input_chat_history.value()
         updates["rate_limit_per_minute"] = self.input_rate_limit.value()
         updates["chroma_dir"] = self.input_chroma_dir.text()
+        updates["welcome_message"] = self.input_welcome_msg.toPlainText()
         
         # Collect Menu Buttons
         menu_btns = []
@@ -520,6 +528,7 @@ class MainWindow(QMainWindow):
             self.input_chat_history.setValue(data.get("chat_history_size", 5))
             self.input_rate_limit.setValue(data.get("rate_limit_per_minute", 10))
             self.input_chroma_dir.setText(data.get("chroma_dir", ""))
+            self.input_welcome_msg.setText(data.get("welcome_message", ""))
             
             # --- Menu Buttons ---
             buttons_config = data.get("menu_buttons", [])

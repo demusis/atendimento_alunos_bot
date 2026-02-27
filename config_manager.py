@@ -78,6 +78,15 @@ class ConfigurationManager:
             "rate_limit_per_minute": 10,
             "chroma_dir": "db_atendimento",
             "log_verbosity": "médio",
+            "welcome_message": (
+                "Sou o assistente virtual do Professor e estou aqui para ajudá-lo(a) "
+                "com dúvidas sobre as disciplinas, horários, materiais e muito mais.\n\n"
+                "💡 Como me usar:\n"
+                "• Envie sua dúvida diretamente por texto\n"
+                "• Use os botões do menu abaixo para acesso rápido\n"
+                "• Digite /ajuda para ver todos os comandos\n\n"
+                "Vamos lá! Como posso ajudá-lo(a)?"
+            ),
             "menu_buttons": [
                 {"id": "btn1", "enabled": True, "text": "Horário", "action": "file_upload", "parameter": "horario"},
                 {"id": "btn2", "enabled": True, "text": "Cronograma", "action": "file_upload", "parameter": "cronograma"},

@@ -1756,18 +1756,17 @@ class TelegramBotController:
         if user_id not in self._known_users:
             self._known_users.add(user_id)
             user_name = update.effective_user.first_name or "Aluno(a)"
-            await update.message.reply_text(
-                f"👋 <b>Olá, {user_name}! Seja bem-vindo(a)!</b>\n\n"
-                "Sou o assistente virtual do Professor e estou aqui para ajudá-lo(a) "
-                "com dúvidas sobre as disciplinas, horários, materiais e muito mais.\n\n"
-                "💡 <b>Como me usar:</b>\n"
-                "• Envie sua dúvida diretamente por texto\n"
-                "• Use os botões do menu abaixo para acesso rápido\n"
-                "• Digite /ajuda para ver todos os comandos\n\n"
-                "Vamos lá! Como posso ajudá-lo(a)?",
-                parse_mode="HTML",
-                reply_markup=self._get_menu_keyboard()
-            )
+            
+            welcome_text = self.config_manager.get("welcome_message", "")
+            if welcome_text:
+                # Support {nome} placeholder
+                welcome_text = welcome_text.replace("{nome}", user_name)
+                await update.message.reply_text(
+                    f"👋 <b>Olá, {user_name}! Seja bem-vindo(a)!</b>\n\n"
+                    f"{welcome_text}",
+                    parse_mode="HTML",
+                    reply_markup=self._get_menu_keyboard()
+                )
         
         # Auto-show /start on first message of the day
         import datetime
