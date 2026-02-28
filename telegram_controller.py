@@ -271,6 +271,13 @@ class TelegramBotController:
             msg = (
                 "🛠️ <b>Painel de Controle do Administrador</b>\n\n"
                 
+                "📎 <b>Envio de Arquivos (Ingestão):</b>\n"
+                "Para adicionar material à base de conhecimento, basta "
+                "<b>enviar o arquivo diretamente neste chat</b> "
+                "(arraste ou use o clipe 📎 do Telegram).\n"
+                "Formatos: <code>PDF, DOCX, CSV, TXT</code>\n"
+                "Use /bd para o guia passo a passo.\n\n"
+                
                 "🧠 <b>IA & Conhecimento:</b>\n"
                 "• /ia <code>[modelo]</code> - Lista ou troca modelo de chat\n"
                 "• /embedding <code>[modelo]</code> - Lista/Troca modelo de busca\n"
@@ -279,7 +286,7 @@ class TelegramBotController:
                 "• /remover <code>[nome]</code> - Remove arquivo da base\n"
                 "• /limpar - Reseta totalmente o banco de dados\n"
                 "• /prompt <code>[texto]</code> - Vê/Edita instruções da IA\n"
-                "• /bd - Guia rápido para ingestão de arquivos\n\n"
+                "• /bd - Guia passo a passo para ingestão de arquivos\n\n"
                 
                 "📢 <b>Comunicação & Avisos:</b>\n"
                 "• /aviso <code>[texto]</code> - Mensagem para TODOS os alunos\n"
@@ -1497,9 +1504,25 @@ class TelegramBotController:
             return
         
         await update.message.reply_text( # type: ignore
-            "🔧 **Modo Admin - Ingestão**\n"
-            "Para adicionar documentos à base de conhecimento, basta **enviar o arquivo (PDF, DOCX, CSV ou TXT)** aqui neste chat.\n"
-            "Eu processarei automaticamente."
+            "📎 <b>Guia de Ingestão de Arquivos</b>\n\n"
+            "<b>Como enviar um arquivo para a base de conhecimento:</b>\n\n"
+            "1️⃣ Abra este chat com o bot\n"
+            "2️⃣ Clique no ícone 📎 (clipe) ao lado da caixa de texto\n"
+            "3️⃣ Selecione <b>Arquivo</b> (ou arraste o arquivo direto para o chat)\n"
+            "4️⃣ Escolha o arquivo desejado e envie\n"
+            "5️⃣ O bot processará e indexará automaticamente! ✅\n\n"
+            "<b>Formatos aceitos:</b>\n"
+            "• 📄 <code>PDF</code> - Artigos, apostilas, provas\n"
+            "• 📝 <code>DOCX</code> - Documentos Word\n"
+            "• 📊 <code>CSV</code> - Planilhas de dados\n"
+            "• 📃 <code>TXT</code> - Texto puro\n\n"
+            "<b>Outros comandos úteis:</b>\n"
+            "• /conhecimento <code>[texto]</code> - Adicionar texto direto (sem arquivo)\n"
+            "• /listar - Ver todos os arquivos na base\n"
+            "• /remover <code>[nome]</code> - Remover um arquivo da base\n"
+            "• /limpar - Apagar toda a base de dados\n\n"
+            "<i>💡 Dica: Você pode enviar vários arquivos de uma vez!</i>",
+            parse_mode="HTML"
         )
 
     async def _cmd_admin_summary(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
