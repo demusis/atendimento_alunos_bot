@@ -762,11 +762,27 @@ class TelegramBotController:
             # 3. Restore stashed local changes (if any)
             subprocess.run(["git", "stash", "pop"], capture_output=True, text=True)
             
-            # 2. Pip Install
+            # 4. Pip Install
             await status_msg.edit_text("📦 Git atualizado. Verificando dependências...")
             subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
             
-            await status_msg.edit_text("✅ Tudo pronto! Reiniciando processo...")
+            # 5. Atualizar serviço systemd (se o arquivo mudou)
+            service_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "telegram-bot.service")
+            service_dst = "/etc/systemd/system/telegram-bot.service"
+            if os.path.exists(service_src):
+                try:
+                    await status_msg.edit_text("⚙️ Atualizando serviço systemd...")
+                    subprocess.run(["sudo", "cp", service_src, service_dst], capture_output=True, text=True)
+                    subprocess.run(["sudo", "systemctl", "daemon-reload"], capture_output=True, text=True)
+                    logger.info("Serviço systemd atualizado via /atualizar.")
+                except Exception as e:
+                    logger.warning(f"Não foi possível atualizar systemd service: {e}")
+            
+            await status_msg.edit_text(
+                f"✅ Tudo pronto! Reiniciando processo...\n\n"
+                f"<b>Git:</b>\n<code>{res.stdout.strip() or 'Already up to date.'}</code>",
+                parse_mode="HTML"
+            )
             await asyncio.sleep(2)
             
             # Create flag file so the bot knows to notify admin after restart
