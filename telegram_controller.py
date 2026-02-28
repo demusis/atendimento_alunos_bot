@@ -284,6 +284,7 @@ class TelegramBotController:
                 "• /embedding <code>[modelo]</code> - Lista/Troca modelo de busca\n"
                 "• /conhecimento <code>[texto]</code> - Ingestão direta de texto\n"
                 "• /listar - Lista e permite ⬇️ baixar arquivos da base\n"
+                "• /arquivo - Salva arquivo na pasta principal sem ingerir\n"
                 "• /remover <code>[nome]</code> - Remove arquivo da base\n"
                 "• /limpar - Reseta totalmente o banco de dados\n"
                 "• /prompt <code>[texto]</code> - Vê/Edita instruções da IA\n"
