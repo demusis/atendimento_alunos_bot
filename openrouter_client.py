@@ -158,3 +158,51 @@ class OpenRouterAdapter:
             "mistralai/mistral-7b-instruct",
             "deepseek/deepseek-chat",
         ]
+
+    def get_balance(self) -> dict:
+        """
+        Fetch balance and usage statistics from OpenRouter API.
+        
+        Returns
+        -------
+        dict
+            Dictionary containing credits and usage data.
+        """
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            
+        result = {
+            "total_credits": 0.0,
+            "total_usage": 0.0,
+            "balance": 0.0,
+            "usage_daily": 0.0,
+            "usage_weekly": 0.0,
+            "usage_monthly": 0.0
+        }
+        
+        try:
+            # Get credits
+            cred_resp = requests.get(f"{self.base_url}/credits", headers=headers, timeout=10)
+            if cred_resp.ok:
+                cred_data = cred_resp.json().get("data", {})
+                result["total_credits"] = cred_data.get("total_credits", 0.0)
+            
+            # Get key usage stats
+            key_resp = requests.get(f"{self.base_url}/auth/key", headers=headers, timeout=10)
+            if key_resp.ok:
+                key_data = key_resp.json().get("data", {})
+                result["total_usage"] = key_data.get("usage", 0.0)
+                result["usage_daily"] = key_data.get("usage_daily", 0.0)
+                result["usage_weekly"] = key_data.get("usage_weekly", 0.0)
+                result["usage_monthly"] = key_data.get("usage_monthly", 0.0)
+            else:
+                if cred_resp.ok:
+                    result["total_usage"] = cred_data.get("total_usage", 0.0)
+
+            result["balance"] = max(0.0, result["total_credits"] - result["total_usage"])
+        except Exception as e:
+            print(f"Erro ao buscar saldo do OpenRouter: {e}")
+            
+        return result
+

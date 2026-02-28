@@ -188,6 +188,7 @@ class TelegramBotController:
         self.application.add_handler(CommandHandler("ia", self._cmd_list_models))
         self.application.add_handler(CommandHandler("embedding", self._cmd_embedding))
         self.application.add_handler(CommandHandler("status", self._cmd_status))
+        self.application.add_handler(CommandHandler("saldo", self._cmd_saldo))
         self.application.add_handler(CommandHandler("aviso", self._cmd_aviso))
         self.application.add_handler(CommandHandler("prompt", self._cmd_prompt))
         self.application.add_handler(CommandHandler("conhecimento", self._cmd_add_knowledge_text))
@@ -297,6 +298,7 @@ class TelegramBotController:
                 
                 "🖥️ <b>Sistema & Hardware:</b>\n"
                 "• /status - Relatório completo de saúde e hardware\n"
+                "• /saldo - Gasto e créditos no OpenRouter\n"
                 "• /monitor_cpu - Uso de CPU e processos ativos\n"
                 "• /speedtest - Teste de internet no servidor\n"
                 "• /logs <code>[baixo|médio|alto]</code> - Nível de detalhes\n"
@@ -654,6 +656,44 @@ class TelegramBotController:
         except Exception as e:
             logger.error(f"Erro no status: {e}")
             await status_msg.edit_text(f"❌ Erro ao obter status: {e}")
+
+    async def _cmd_saldo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/saldo - Exibe o saldo e gastos da chave do OpenRouter."""
+        if not update.message: return
+        if not self._is_admin(update):
+            await update.message.reply_text("⛔ Acesso negado.")
+            return
+
+        status_msg = await update.message.reply_text("⏳ Consultando informações financeiras do OpenRouter...")
+        
+        try:
+            from openrouter_client import OpenRouterAdapter
+            key = self.config_manager.get("openrouter_key", "")
+            if not key:
+                await status_msg.edit_text("❌ Chave do OpenRouter não configurada no bot.")
+                return
+                
+            adapter = OpenRouterAdapter(api_key=key)
+            loop = asyncio.get_running_loop()
+            stats = await loop.run_in_executor(None, adapter.get_balance)
+            
+            report = (
+                "💰 <b>Painel Financeiro - OpenRouter</b>\n\n"
+                f"🏦 <b>Créditos Disponíveis:</b> <code>${stats['balance']:.4f}</code>\n"
+                f"🪙 <b>Total de Créditos:</b> <code>${stats['total_credits']:.4f}</code>\n"
+                f"📈 <b>Uso Total:</b> <code>${stats['total_usage']:.4f}</code>\n\n"
+                f"🔥 <b>Consumo Recente:</b>\n"
+                f"• Gasto Hoje: <code>${stats['usage_daily']:.4f}</code>\n"
+                f"• Gasto na Semana: <code>${stats['usage_weekly']:.4f}</code>\n"
+                f"• Gasto no Mês: <code>${stats['usage_monthly']:.4f}</code>\n\n"
+                "<i>Nota: O OpenRouter informa apenas métricas diárias, semanais e mensais.</i>"
+            )
+            
+            await status_msg.edit_text(report, parse_mode="HTML")
+            
+        except Exception as e:
+            logger.error(f"Erro ao consultar saldo: {e}")
+            await status_msg.edit_text(f"❌ Erro ao consultar saldo: {e}")
 
     async def _cmd_restart_bot(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/reiniciar_bot - Restart the bot process."""
