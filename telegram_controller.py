@@ -590,9 +590,28 @@ class TelegramBotController:
                 mem_info = f"{mem.percent}% ({mem.used // (1024**2)}MB / {mem.total // (1024**2)}MB)"
                 disk = psutil.disk_usage('/')
                 disk_info = f"{disk.percent}% ({disk.free // (1024**3)}GB de {disk.total // (1024**3)}GB)"
-                return hostname, mem_info, disk_info
+                
+                # Tentar obter temperatura
+                temp_info = "N/A"
+                if hasattr(psutil, "sensors_temperatures"):
+                    temps = psutil.sensors_temperatures()
+                    if temps:
+                        # Raspbery Pi usa cpu_thermal
+                        if "cpu_thermal" in temps:
+                            temp_info = f"{temps['cpu_thermal'][0].current:.1f}°C"
+                        elif "coretemp" in temps:
+                            temp_info = f"{temps['coretemp'][0].current:.1f}°C"
+                # Fallback para Raspberry Pi lendo arquivo sysfs
+                if temp_info == "N/A":
+                    import os
+                    if os.path.exists('/sys/class/thermal/thermal_zone0/temp'):
+                        with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+                            t = int(f.read().strip()) / 1000.0
+                            temp_info = f"{t:.1f}°C"
+                            
+                return hostname, mem_info, disk_info, temp_info
             except:
-                return hostname, "N/A", "N/A"
+                return hostname, "N/A", "N/A", "N/A"
 
         try:
             # Execute database and system tasks in parallel
@@ -600,22 +619,28 @@ class TelegramBotController:
             ollama_task = get_ollama_info()
             metrics_task = get_sys_metrics()
             
-            db_stats, (ollama_status, ollama_lat), (hostname, mem_info, disk_info) = await asyncio.gather(
+            db_stats, (ollama_status, ollama_lat), (hostname, mem_info, disk_info, temp_info) = await asyncio.gather(
                 db_task, ollama_task, metrics_task
             )
 
             current_model = self.config_manager.get("ollama_model", "N/A")
             provider = self.config_manager.get("ai_provider", "ollama")
+            
             emb_provider = self.config_manager.get("embedding_provider", "ollama")
+            if emb_provider == "openrouter":
+                emb_model = self.config_manager.get("openrouter_embedding_model", "N/A")
+            else:
+                emb_model = self.config_manager.get("ollama_embedding_model", "N/A")
             
             import html
             report = (
                 "📊 <b>Status do Sistema</b>\n\n"
                 f"🖥️ <b>Host:</b> <code>{html.escape(hostname)}</code>\n"
+                f"🌡️ <b>Temperatura:</b> <code>{temp_info}</code>\n"
                 f"📈 <b>RAM:</b> <code>{mem_info}</code>\n"
                 f"💽 <b>Disco:</b> <code>{disk_info}</code>\n\n"
                 f"🤖 <b>AI Chat:</b> <code>{provider.upper()}</code> ({html.escape(str(current_model))})\n"
-                f"🧬 <b>Embeddings:</b> <code>{emb_provider.upper()}</code>\n"
+                f"🧬 <b>Embeddings:</b> <code>{emb_provider.upper()}</code> ({html.escape(str(emb_model))})\n"
                 f"📡 <b>Ollama:</b> {ollama_status} ({ollama_lat})\n\n"
                 "📂 <b>Base de Conhecimento:</b>\n"
                 f"- Arquivos: <code>{db_stats.get('file_count', 0)}</code>\n"
