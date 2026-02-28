@@ -93,8 +93,10 @@ def main():
         elif action == "delete":
             filename = data["filename"]
             result = repo.delete_document(filename)
-            # Result is already a dict with ok: True/False
-            print(json.dumps(result))
+            if result.get("ok"):
+                print(json.dumps({"ok": True, "result": result}))
+            else:
+                print(json.dumps(result))
 
         elif action == "stats":
             result = repo.get_stats()
