@@ -623,8 +623,11 @@ class TelegramBotController:
                 db_task, ollama_task, metrics_task
             )
 
-            current_model = self.config_manager.get("ollama_model", "N/A")
             provider = self.config_manager.get("ai_provider", "ollama")
+            if provider == "openrouter":
+                current_model = self.config_manager.get("openrouter_model", "N/A")
+            else:
+                current_model = self.config_manager.get("ollama_model", "N/A")
             
             emb_provider = self.config_manager.get("embedding_provider", "ollama")
             if emb_provider == "openrouter":
