@@ -148,10 +148,10 @@ class TelegramBotController:
                     input=worker_data,
                     capture_output=True, text=True,
                     cwd=os.path.dirname(os.path.abspath(__file__)),
-                    timeout=180 # 180 seconds timeout for any DB operation
+                    timeout=300 # 300 seconds timeout for any DB operation
                 )
             except subprocess.TimeoutExpired:
-                 logger.error(f"ChromaDB worker timed out after 180s (Action: {action_data.get('action')})")
+                 logger.error(f"ChromaDB worker timed out after 300s (Action: {action_data.get('action')})")
                  raise RuntimeError("Base de dados demorou muito para responder")
             if result.returncode != 0:
                 error_msg = result.stderr.strip() if result.stderr else "Processo encerrado inesperadamente"
@@ -1799,7 +1799,7 @@ class TelegramBotController:
             await update.message.reply_text(f"✅ Sucesso! {chunks} fragmentos adicionados.\nO arquivo agora está disponível para baixar no menu /listar.") # type: ignore
         except Exception as e:
             import traceback
-            logger.error(f"Erro na ingestão do arquivo: {type(e).__name}: {e}")
+            logger.error(f"Erro na ingestão do arquivo: {type(e).__name__}: {e}")
             logger.error(traceback.format_exc())
             try:
                 await update.message.reply_text(f"❌ Erro ao processar: {e}") # type: ignore
