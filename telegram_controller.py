@@ -192,6 +192,7 @@ class TelegramBotController:
         self.application.add_handler(CommandHandler("prompt", self._cmd_prompt))
         self.application.add_handler(CommandHandler("conhecimento", self._cmd_add_knowledge_text))
         self.application.add_handler(CommandHandler("meuid", self._cmd_my_id))
+        self.application.add_handler(CommandHandler("arquivo", self._cmd_arquivo))
         self.application.add_handler(CommandHandler("estatisticas", self._cmd_admin_summary))
         self.application.add_handler(CommandHandler("lembrete", self._cmd_add_reminder))
         # Admin System Management
@@ -1110,6 +1111,21 @@ class TelegramBotController:
             logger.error(f"Erro no /conhecimento: {e}")
             await status_msg.edit_text(f"❌ Erro ao injetar texto: {e}")
 
+    async def _cmd_arquivo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle the /arquivo command - saves file without ingestion."""
+        if not update.message: return
+        if not self._is_admin(update):
+            await update.message.reply_text("⛔ Acesso negado.")
+            return
+
+        await update.message.reply_text(
+            "📁 <b>Salvar Arquivo sem Ingestão</b>\n\n"
+            "Para salvar um arquivo na pasta principal do bot sem que ele seja lido pela IA, "
+            "envie o arquivo e escreva <code>/arquivo</code> na <b>legenda (caption)</b>.\n\n"
+            "<i>(A pasta 'arquivos' será criada automaticamente se não existir)</i>",
+            parse_mode="HTML"
+        )
+
     async def _cmd_my_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle the /meuid command."""
         if not update.message:
@@ -1676,11 +1692,17 @@ class TelegramBotController:
             # Ignore or reply
             await update.message.reply_text("Eu não posso processar arquivos enviados por você.") # type: ignore
             return
+            
+        caption = (update.message.caption or "").strip()
+        is_only_save = caption.startswith("/arquivo") or caption.startswith("\\arquivo")
         
         file = await update.message.document.get_file() # type: ignore
         file_name = update.message.document.file_name # type: ignore
         
-        await update.message.reply_text(f"📥 Recebendo {file_name}...") # type: ignore
+        if is_only_save:
+            await update.message.reply_text(f"📥 Recebendo {file_name} apenas para salvamento...") # type: ignore
+        else:
+            await update.message.reply_text(f"📥 Recebendo {file_name} para ingestão...") # type: ignore
         
         # Save permanently to 'arquivos' for later download support
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1690,6 +1712,11 @@ class TelegramBotController:
         
         await file.download_to_drive(file_path)
         
+        if is_only_save:
+            await update.message.reply_text(f"✅ Arquivo salvo com sucesso na pasta 'arquivos'.\n\n(Nenhuma ingestão na base de dados foi realizada).") # type: ignore
+            logger.info(f"Arquivo salvo sem ingestão pelo admin: {file_name}")
+            return
+            
         # Ingest via subprocess worker
         try:
             await update.message.reply_text("⚙️ Processando e Indexando...") # type: ignore
@@ -1795,6 +1822,8 @@ class TelegramBotController:
             elif cmd_part == "conhecimento":
                 context.args = parts[1:] if len(parts) > 1 else []
                 return await self._cmd_add_knowledge_text(update, context)
+            elif cmd_part == "arquivo":
+                return await self._cmd_arquivo(update, context)
             elif cmd_part == "faq":
                 return await self._cmd_faq(update, context)
             # If it's a backslash but not a command, we continue to RAG if appropriate
