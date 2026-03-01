@@ -117,15 +117,27 @@ class BotTerminalUI(App):
 
         with Container():
             with TabbedContent():
-                # Aba 1: Controle e Logs (Equivalente à aba 'Terminal e Controle' da GUI)
-                with TabPane("Controle & Logs", id="tab-controls"):
-                    with Vertical():
-                        # Painel de Botões de Controle
+                # Nova Aba 1: Painel Principal (Visão Geral)
+                with TabPane("Painel Principal", id="tab-main"):
+                    with Vertical(classes="panel"):
+                        yield Static("📊 Status Geral do Assistente Acadêmico", classes="panel-title")
+                        yield Label("Status: VERIFICANDO...", id="lbl-status-main", classes="status-label")
+                        
                         with Horizontal(id="controls-container"):
                             yield Button("▶️ Iniciar Bot", id="btn-start", variant="success")
                             yield Button("⏹️ Parar Bot", id="btn-stop", variant="error", disabled=True)
-                            yield Label("Status: PARADO", id="lbl-status", classes="status-label")
-                        
+                            
+                        yield Static(
+                            "🌐 IP Intranet: Oculto\n"
+                            "🌍 IP Internet: Oculto\n"
+                            "🔒 Tailscale: Oculto\n",
+                            id="lbl-network-info", classes="panel"
+                        )
+
+                # Aba 2: Terminal de Logs
+                with TabPane("Terminal de Logs", id="tab-controls"):
+                    with Vertical():
+                        yield Label("Status: VERIFICANDO...", id="lbl-status", classes="status-label", styles="display: none;") # Mantido oculto por compatibilidade
                         yield Static("📺 Console (bot.log):", classes="panel-title")
                         
                         # Painel de Log (ecoa em tempo real)
@@ -182,6 +194,7 @@ class BotTerminalUI(App):
 
         if is_running_externally:
             self.query_one("#lbl-status", Label).update("Status: [yellow]RODANDO EM BACKGROUND (start_rp4)[/yellow]")
+            self.query_one("#lbl-status-main", Label).update("Status: [yellow]RODANDO EM BACKGROUND (start_rp4)[/yellow]")
             self.query_one("#btn-start", Button).disabled = True
             # Parar não funciona pelo TUI para kills externos a menos que usemos os.kill na thread principal. Melhor evitar para não quebrar a lógica do watchdog
             self.query_one("#btn-stop", Button).disabled = True
@@ -189,12 +202,14 @@ class BotTerminalUI(App):
             
         elif is_running_internally:
             self.query_one("#lbl-status", Label).update("Status: [green]RODANDO[/green]")
+            self.query_one("#lbl-status-main", Label).update("Status: [green]RODANDO[/green]")
             self.query_one("#btn-start", Button).disabled = True
             self.query_one("#btn-stop", Button).disabled = False
             self.query_one("#btn-stop", Button).tooltip = ""
             
         else:
             self.query_one("#lbl-status", Label).update("Status: [red]PARADO[/red]")
+            self.query_one("#lbl-status-main", Label).update("Status: [red]PARADO[/red]")
             self.query_one("#btn-start", Button).disabled = False
             self.query_one("#btn-stop", Button).disabled = True
             self.query_one("#btn-stop", Button).tooltip = ""
