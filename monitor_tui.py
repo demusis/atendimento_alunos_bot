@@ -226,15 +226,19 @@ class BotTerminalUI(App):
         try:
             import time
             with open(log_file, "r", encoding="utf-8") as f:
-                # Pula para o final para não descer o log anterior completo de uma vez
+                # Pula para o final
                 f.seek(0, 2)
+                
                 while not getattr(self, "stop_logging", False):
+                    where = f.tell()
                     line = f.readline()
+                    
                     if not line:
                         time.sleep(0.5)
+                        f.seek(where) # Reset pointer since readline might have advanced without full line
                         continue
-                    
-                    # call_from_thread agenda a função para rodar na thread principal de forma segura
+                        
+                    # Agenda de forma segura para o EventLoop da Tela principal renderizar
                     self.call_from_thread(self.log_view.write_line, line.strip())
         except Exception as e:
             self.call_from_thread(self.log_view.write_line, f"Erro ao ler logs: {e}")
