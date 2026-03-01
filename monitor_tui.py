@@ -176,6 +176,57 @@ class BotTerminalUI(App):
         
         # Monitora a saúde do bot e verifica se ele está rodando de forma externa (start_rp4.sh / systemd)
         self.set_interval(2.0, self.check_external_status)
+        
+        # Busca IPs em background
+        asyncio.create_task(self.fetch_network_info())
+
+    async def fetch_network_info(self) -> None:
+        """Obtém os IPs assincronamente e atualiza o painel principal."""
+        import socket
+        import httpx
+        
+        local_ip = "N/A"
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+        except:
+            pass
+            
+        public_ip = "Verificando..."
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get("https://api.ipify.org", timeout=3.0)
+                if resp.status_code == 200:
+                    public_ip = resp.text.strip()
+                else:
+                    public_ip = "N/A"
+        except:
+            public_ip = "N/A"
+            
+        tailscale_ip = "N/A"
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                'tailscale ip -4', 
+                stdout=asyncio.subprocess.PIPE, 
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
+            if proc.returncode == 0:
+                tailscale_ip = stdout.decode('utf-8').strip()
+        except:
+            pass
+
+        info_text = (
+            f"🌐 IP Intranet: {local_ip}\n"
+            f"🌍 IP Internet: {public_ip}\n"
+            f"🔒 Tailscale: {tailscale_ip}\n"
+        )
+        try:
+            self.query_one("#lbl-network-info", Static).update(info_text)
+        except:
+            pass
 
     def check_external_status(self) -> None:
         """Verifica se há um lock PID externo criado pelo script start_rp4.sh e ajusta a interface."""
