@@ -615,14 +615,56 @@ class TelegramBotController:
             except:
                 return hostname, "N/A", "N/A", "N/A"
 
+        async def get_network_info():
+            import socket
+            import httpx
+            import asyncio
+            
+            # Local IP (Intranet)
+            local_ip = "N/A"
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+            except Exception:
+                pass
+                
+            # Public IP (Internet)
+            public_ip = "N/A"
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get("https://api.ipify.org", timeout=2.0)
+                    if resp.status_code == 200:
+                        public_ip = resp.text.strip()
+            except Exception:
+                pass
+                
+            # Tailscale IP
+            tailscale_ip = "N/A"
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    'tailscale ip -4', 
+                    stdout=asyncio.subprocess.PIPE, 
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
+                if proc.returncode == 0:
+                    tailscale_ip = stdout.decode('utf-8').strip()
+            except Exception:
+                pass
+                
+            return local_ip, public_ip, tailscale_ip
+
         try:
             # Execute database and system tasks in parallel
             db_task = self._run_chroma_worker({"action": "stats"})
             ollama_task = get_ollama_info()
             metrics_task = get_sys_metrics()
+            network_task = get_network_info()
             
-            db_stats, (ollama_status, ollama_lat), (hostname, mem_info, disk_info, temp_info) = await asyncio.gather(
-                db_task, ollama_task, metrics_task
+            db_stats, (ollama_status, ollama_lat), (hostname, mem_info, disk_info, temp_info), (local_ip, public_ip, tailscale_ip) = await asyncio.gather(
+                db_task, ollama_task, metrics_task, network_task
             )
 
             provider = self.config_manager.get("ai_provider", "ollama")
@@ -644,7 +686,15 @@ class TelegramBotController:
                 f"🌡️ <b>Temperatura:</b> <code>{temp_info}</code>\n"
                 f"📈 <b>RAM:</b> <code>{mem_info}</code>\n"
                 f"💽 <b>Disco:</b> <code>{disk_info}</code>\n\n"
-                f"🤖 <b>AI Chat:</b> <code>{provider.upper()}</code> ({html.escape(str(current_model))})\n"
+                f"🌐 <b>Rede & IPs:</b>\n"
+                f"• Intranet: <code>{local_ip}</code>\n"
+                f"• Internet: <code>{public_ip}</code>\n"
+            )
+            if tailscale_ip != "N/A":
+                report += f"• Tailscale: <code>{tailscale_ip}</code>\n"
+                
+            report += (
+                f"\n🤖 <b>AI Chat:</b> <code>{provider.upper()}</code> ({html.escape(str(current_model))})\n"
                 f"🧬 <b>Embeddings:</b> <code>{emb_provider.upper()}</code> ({html.escape(str(emb_model))})\n"
                 f"📡 <b>Ollama:</b> {ollama_status} ({ollama_lat})\n\n"
                 "📂 <b>Base de Conhecimento:</b>\n"
