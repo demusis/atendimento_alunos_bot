@@ -24,7 +24,8 @@ show_help() {
     echo "Uso: ./monitor_rp4.sh [opção]"
     echo ""
     echo "Opções:"
-    echo "  (sem argumento)  Mostra logs do bot.log em tempo real (tail -f)"
+    echo "  (sem argumento)  Inicia a Interface Gráfica de Terminal (TUI) via Textual"
+    echo "  --tui            Força a inicialização explícita da TUI"
     echo "  --journal        Mostra logs do systemd (journalctl)"
     echo "  --full           Mostra AMBOS (journal + bot.log) intercalados"
     echo "  --status         Mostra status do serviço e últimas 30 linhas"
@@ -34,8 +35,8 @@ show_help() {
     echo "  --help           Mostra esta ajuda"
     echo ""
     echo -e "${CYAN}Exemplos:${NC}"
-    echo "  ./monitor_rp4.sh                # Acompanhar em tempo real"
-    echo "  ./monitor_rp4.sh --erros        # Ver apenas erros"
+    echo "  ./monitor_rp4.sh                # Abrir a TUI nova"
+    echo "  ./monitor_rp4.sh --erros        # Ver apenas erros direto no terminal"
     echo "  ./monitor_rp4.sh --busca 'HTTP' # Filtrar por texto"
     echo "  ./monitor_rp4.sh --status       # Ver se está rodando"
     echo ""
@@ -146,22 +147,43 @@ case "${1:-}" in
         fi
         ;;
 
+    --tui)
+        echo -e "${GREEN}📡 Iniciando Monitor Avançado TUI...${NC}"
+        # Ativa o ambiente virtual se existir
+        if [ -d "venv" ]; then
+            source venv/bin/activate
+        fi
+        export PYTHONPATH=$PYTHONPATH:.
+        python3 main.py --tui
+        ;;
+
     *)
-        # Padrão: tail -f no bot.log
+        # Padrão: Tenta rodar a TUI, se falhar ou se quiser passar flags textuais antigas:
         echo -e "${GREEN}"
         echo "=========================================="
-        echo "   📡 Monitor do Bot - Tempo Real"
+        echo "   📡 Monitor do Bot - Terminal UI"
         echo "=========================================="
         echo -e "${NC}"
-        echo -e "${YELLOW}Pressione CTRL+C para sair.${NC}"
+        echo -e "${YELLOW}Iniciando a interface visual...${NC}"
         echo ""
 
-        if [ -f "$LOG_FILE" ]; then
-            tail -f "$LOG_FILE"
-        else
-            echo "⚠️ bot.log não encontrado em $LOG_FILE"
-            echo "Tentando via journalctl..."
-            journalctl -u telegram-bot.service -f --no-pager --output=short-iso
+        if [ -d "venv" ]; then
+            source venv/bin/activate
+        fi
+        export PYTHONPATH=$PYTHONPATH:.
+        
+        # O main.py --tui tem seu próprio fallback se textual falhar,
+        # mas caso a execução retorne erro catastrófico, o bash vai dar tail log comum.
+        python3 main.py --tui
+        
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+            echo -e "${YELLOW}⚠️ Falha ao carregar TUI (código $EXIT_CODE). Acionando log retro...${NC}"
+            if [ -f "$LOG_FILE" ]; then
+                tail -f "$LOG_FILE"
+            else
+                journalctl -u telegram-bot.service -f --no-pager --output=short-iso
+            fi
         fi
         ;;
 esac

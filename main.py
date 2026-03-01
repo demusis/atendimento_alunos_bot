@@ -74,7 +74,8 @@ async def run_cli():
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="AI Telegram Bot Manager")
-    parser.add_argument("--cli", action="store_true", help="Rodar em modo texto (sem interface gráfica)")
+    parser.add_argument("--cli", action="store_true", help="Rodar em modo texto simples (sem interface)")
+    parser.add_argument("--tui", action="store_true", help="Rodar em modo terminal UI (Textual)")
     args, unknown = parser.parse_known_args()
 
     # Explicit CLI Mode
@@ -83,6 +84,19 @@ def main():
             asyncio.run(run_cli())
         except KeyboardInterrupt:
             pass
+        return
+        
+    # Explicit TUI Mode
+    if args.tui:
+        try:
+            from monitor_tui import BotTerminalUI
+            app = BotTerminalUI()
+            app.run()
+        except ImportError:
+            print("⚠️ Erro: Biblioteca 'textual' não encontrada. Instalando dependência ou caindo para CLI...")
+            asyncio.run(run_cli())
+        except Exception as e:
+            print(f"Erro na TUI: {e}")
         return
 
     # GUI Mode (Attempt)
@@ -104,16 +118,25 @@ def main():
         sys.exit(app.exec())
         
     except Exception as e:
-        print("\n⚠️  Aviso: Não foi possível iniciar a interface gráfica.")
-        print(f"Erro: {e}")
-        print("-" * 50)
-        print("Acionando MODO CLI automaticamente...")
+        print("\n⚠️ Aviso: Não foi possível iniciar a interface gráfica PyQt6.")
+        print(f"Detalhe: {e}")
         print("-" * 50)
         
+        # Tentativa de inicializar a Textual UI se GUI falhar
         try:
-            asyncio.run(run_cli())
-        except KeyboardInterrupt:
-            pass
+            import textual
+            print("Acionando MODO TUI (Terminal UI) automaticamente...")
+            print("-" * 50)
+            from monitor_tui import BotTerminalUI
+            app = BotTerminalUI()
+            app.run()
+        except ImportError:
+            print("Acionando MODO CLI automaticamente (Textual UI não instalada)...")
+            print("-" * 50)
+            try:
+                asyncio.run(run_cli())
+            except KeyboardInterrupt:
+                pass
 
 if __name__ == "__main__":
     main()
