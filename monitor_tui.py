@@ -18,54 +18,65 @@ class BotTerminalUI(App):
     # CSS para garantir um fundo legível e "limpo" num terminal, e estruturar painéis.
     CSS = """
     Screen {
-        background: #f0f0f0;  /* Fundo "branquicento" / cinza bem claro */
-        color: #111111;       /* Texto escuro padrão */
+        background: #0a0a0a;  /* Fundo preto profundo para contraste */
+        color: #e0e0e0;       /* Texto cinza claro/branco para leitura */
     }
 
     Header {
-        background: #2b5b84;
-        color: white;
+        background: #1a4a75;
+        color: #ffffff;
+        text-style: bold;
     }
 
     Footer {
-        background: #e0e0e0;
-        color: #333333;
+        background: #1a1a1a;
+        color: #888888;
     }
 
     TabPane {
         padding: 1;
-        background: #ffffff;
+        background: #0a0a0a;
     }
     
     .panel {
-        border: solid #aaaaaa;
+        border: solid #2b5b84;
         padding: 1;
         margin: 1 0;
-        background: #ffffff;
+        background: #121212;
     }
 
     Log {
         height: 1fr;
-        border: solid #2b5b84;
-        background: #1e1e1e; /* Painel do log continua com cara de terminal (escuro) para facilitar leitura das cores de log (opcionalmente) */
-        color: lime;
+        border: double #2b5b84;
+        background: #000000; 
+        color: #00ff00; /* Verde clássico de terminal para logs */
     }
 
     .status-label {
         text-style: bold;
         margin-bottom: 1;
         padding: 1;
-        background: #eeeeee;
-        border: solid #cccccc;
+        background: #1a1a1a;
+        border: tall #333333;
+        color: #ffffff;
     }
     
     Button {
         margin: 1 1;
+        border: none;
     }
 
     #controls-container {
         height: auto;
         padding: 1;
+        background: #121212;
+        border-bottom: solid #2b5b84;
+    }
+
+    .panel-title {
+        text-style: bold;
+        color: #2b5b84;
+        margin-top: 1;
     }
     """
 
