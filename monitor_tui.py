@@ -331,24 +331,24 @@ class BotTerminalUI(App):
         self.query_one("#btn-stop", Button).disabled = True
 
     def restart_service(self) -> None:
-        """Reinicia o serviço systemd do bot em background no Raspberry Pi."""
-        self.log_view.write_line(">>> Enviando comando de restart para o systemd (telegram-bot.service)...")
+        """Reinicia o serviço matando o processo filho, o que ativa o Watchdog silencioso do script."""
+        self.log_view.write_line(">>> Enviando sinal de reinício para o processo em background...")
         try:
             async def run_restart():
+                # Evita o "sudo systemctl" que pede senha nativamente arruinando a TUI.
+                # Como o start_rp4.sh possui um Watchdog (restart count e sleep), 
+                # ao fechar a instância Python, ele aciona o reboot automaticamente.
                 proc = await asyncio.create_subprocess_shell(
-                    'sudo systemctl restart telegram-bot.service',
+                    'pkill -f "python3 main.py --cli" || pkill -f "python main.py --cli"',
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                stdout, stderr = await proc.communicate()
-                if proc.returncode == 0:
-                    self.log_view.write_line(">>> Serviço reiniciado com sucesso via CLI! Acompanhe o log.")
-                else:
-                    self.log_view.write_line(f">>> Falha ao reiniciar serviço: {stderr.decode('utf-8')}")
+                await proc.communicate()
+                self.log_view.write_line(">>> Processo finalizado com sucesso. O Watchdog ligará o bot novamente em até 15 segundos...")
             
             asyncio.create_task(run_restart())
         except Exception as e:
-             self.log_view.write_line(f">>> Erro interno ao chamar systemctl: {e}")
+             self.log_view.write_line(f">>> Erro interno ao chamar restart: {e}")
 
     def tail_logs(self):
         """Lê o arquivo de log do bot num loop independente (como 'tail -f') sem travar a interface."""
