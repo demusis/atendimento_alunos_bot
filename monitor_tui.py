@@ -127,6 +127,16 @@ class BotTerminalUI(App):
     .menu-row {
         height: auto;
     }
+    Input, Select, TextArea, Switch {
+        background: #2a2a2a;
+        color: #f0f0f0;
+        border: solid #555555;
+        margin-bottom: 1;
+    }
+    Input:focus, Select:focus, TextArea:focus {
+        border: solid #2196f3;
+        background: #333333;
+    }
     TextArea {
         height: 6;
     }
