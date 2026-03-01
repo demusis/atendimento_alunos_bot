@@ -342,9 +342,9 @@ class BotTerminalUI(App):
                 )
                 stdout, stderr = await proc.communicate()
                 if proc.returncode == 0:
-                    self.call_from_thread(self.log_view.write_line, ">>> Serviço reiniciado com sucesso via CLI! Acompanhe o log.")
+                    self.log_view.write_line(">>> Serviço reiniciado com sucesso via CLI! Acompanhe o log.")
                 else:
-                    self.call_from_thread(self.log_view.write_line, f">>> Falha ao reiniciar serviço: {stderr.decode('utf-8')}")
+                    self.log_view.write_line(f">>> Falha ao reiniciar serviço: {stderr.decode('utf-8')}")
             
             asyncio.create_task(run_restart())
         except Exception as e:
