@@ -3,7 +3,7 @@ import os
 import sys
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Header, Footer, Log, TabbedContent, TabPane, Button, Static, Label, Input, Select, Switch, TextArea
 from textual.binding import Binding
 
@@ -185,7 +185,7 @@ class BotTerminalUI(App):
 
                 # Aba 3: Menu Principal
                 with TabPane("Menu Principal", id="tab-menu"):
-                    with Vertical():
+                    with VerticalScroll():
                         yield Static("⚙️ Configuração dos Botões do Menu", classes="panel-title")
                         yield Button("💾 Salvar Alterações", id="btn-save-menu", variant="success")
                         yield Label("", id="lbl-save-status", classes="status-label")
