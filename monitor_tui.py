@@ -18,8 +18,8 @@ class BotTerminalUI(App):
     # CSS para garantir um fundo legível e "limpo" num terminal, e estruturar painéis.
     CSS = """
     Screen {
-        background: #0a0a0a;  /* Fundo preto profundo para contraste */
-        color: #e0e0e0;       /* Texto cinza claro/branco para leitura */
+        background: #0a0a0a;  /* Fundo preto profundo */
+        color: #e0e0e0;       /* Texto cinza claro */
     }
 
     Header {
@@ -49,7 +49,7 @@ class BotTerminalUI(App):
         height: 1fr;
         border: double #2b5b84;
         background: #000000; 
-        color: #00ff00; /* Verde clássico de terminal para logs */
+        color: #00ff00;
     }
 
     .status-label {
@@ -59,10 +59,29 @@ class BotTerminalUI(App):
         background: #1a1a1a;
         border: tall #333333;
         color: #ffffff;
+        width: 100%;
     }
     
+    /* Estilização explícita de botões para evitar blocos cinzas sem texto */
     Button {
         margin: 1 1;
+        width: 20;
+    }
+
+    Button.-success {
+        background: #2e7d32;
+        color: white;
+    }
+
+    Button.-error {
+        background: #c62828;
+        color: white;
+    }
+
+    /* Garantir que botões bloqueados (running background) ainda mostrem o texto */
+    Button:disabled {
+        background: #333333;
+        color: #777777;
         border: none;
     }
 
