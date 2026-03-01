@@ -97,6 +97,10 @@ class BotTerminalUI(App):
         color: #2b5b84;
         margin-top: 1;
     }
+
+    .hidden-label {
+        display: none;
+    }
     """
 
     BINDINGS = [
@@ -137,7 +141,7 @@ class BotTerminalUI(App):
                 # Aba 2: Terminal de Logs
                 with TabPane("Terminal de Logs", id="tab-controls"):
                     with Vertical():
-                        yield Label("Status: VERIFICANDO...", id="lbl-status", classes="status-label", styles="display: none;") # Mantido oculto por compatibilidade
+                        yield Label("Status: VERIFICANDO...", id="lbl-status", classes="status-label hidden-label")
                         yield Static("📺 Console (bot.log):", classes="panel-title")
                         
                         # Painel de Log (ecoa em tempo real)
