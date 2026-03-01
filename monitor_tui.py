@@ -4,9 +4,10 @@ import sys
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Log, TabbedContent, TabPane, Button, Static, Label
+from textual.widgets import Header, Footer, Log, TabbedContent, TabPane, Button, Static, Label, Input, Select, Switch, TextArea
 from textual.binding import Binding
 
+from config_manager import ConfigurationManager
 from telegram_controller import TelegramBotController
 
 class BotTerminalUI(App):
@@ -106,6 +107,33 @@ class BotTerminalUI(App):
     .hidden-label {
         display: none;
     }
+
+    /* Menu Principal CSS */
+    #tab-menu {
+        overflow-y: auto;
+    }
+    .menu-group {
+        border: solid #2b5b84;
+        margin-top: 1;
+        margin-bottom: 1;
+        background: #111111;
+        padding: 1;
+        height: auto;
+    }
+    .menu-label-bold {
+        text-style: bold;
+        color: #ffb74d;
+    }
+    .menu-row {
+        height: auto;
+    }
+    TextArea {
+        height: 6;
+    }
+    #lbl-save-status {
+        margin-top: 1;
+        text-style: bold;
+    }
     """
 
     BINDINGS = [
@@ -119,6 +147,7 @@ class BotTerminalUI(App):
         self.bot_task = None
         self.log_file_path = "bot.log"
         self._tail_task = None
+        self.config_manager = ConfigurationManager()
 
     def compose(self) -> ComposeResult:
         """Cria o layout da TUI."""
@@ -154,7 +183,37 @@ class BotTerminalUI(App):
                         self.log_view = Log(id="log-view")
                         yield self.log_view
 
-                # Aba 2: Outros (Placeholder para Settings, Conhecimento, etc que existirem na GUI)
+                # Aba 3: Menu Principal
+                with TabPane("Menu Principal", id="tab-menu"):
+                    with Vertical():
+                        yield Static("⚙️ Configuração dos Botões do Menu", classes="panel-title")
+                        yield Button("💾 Salvar Alterações", id="btn-save-menu", variant="success")
+                        yield Label("", id="lbl-save-status", classes="status-label")
+                        
+                        for i in range(5):
+                            with Vertical(classes="menu-group"):
+                                yield Label(f"Botão {i+1}", classes="menu-label-bold")
+                                with Horizontal(classes="menu-row"):
+                                    yield Label("Habilitado:")
+                                    yield Switch(id=f"chk_enabled_{i}", value=True)
+                                
+                                yield Label("Texto do Botão:")
+                                yield Input(id=f"txt_label_{i}", placeholder="Ex: Informações")
+                                
+                                yield Label("Tipo de Ação:")
+                                yield Select(
+                                    options=[
+                                        ("Texto Fixo (Configurado aqui)", "fixed_text"),
+                                        ("Ler de Arquivo Texto (Em arquivos/)", "text_file"),
+                                        ("Upload de Arquivos (Pelo prefixo)", "file_upload")
+                                    ],
+                                    id=f"cmb_action_{i}"
+                                )
+                                
+                                yield Label("Parâmetro (Texto/Arquivo/Prefixo):")
+                                yield TextArea(id=f"txt_param_{i}")
+                
+                # Aba 4: Outros (Placeholder para Settings, Conhecimento)
                 with TabPane("Base de Conhecimento", id="tab-kb"):
                     with Vertical(classes="panel"):
                         yield Static(
@@ -185,6 +244,9 @@ class BotTerminalUI(App):
         
         # Busca IPs em background
         asyncio.create_task(self.fetch_network_info())
+        
+        # Carrega configurações na interface do menu
+        self.load_menu_settings()
 
     async def fetch_network_info(self) -> None:
         """Obtém os IPs assincronamente e atualiza o painel principal."""
@@ -288,6 +350,60 @@ class BotTerminalUI(App):
             self.stop_bot()
         elif btn_id == "btn-restart-svc":
             self.restart_service()
+        elif btn_id == "btn-save-menu":
+            self.save_menu_settings()
+
+    def load_menu_settings(self) -> None:
+        """Carrega os botões salvos na TUI."""
+        buttons = self.config_manager.get("menu_buttons", [])
+        for i in range(5):
+            try:
+                chk = self.query_one(f"#chk_enabled_{i}", Switch)
+                txt_label = self.query_one(f"#txt_label_{i}", Input)
+                cmb = self.query_one(f"#cmb_action_{i}", Select)
+                txt_param = self.query_one(f"#txt_param_{i}", TextArea)
+                
+                if i < len(buttons):
+                    btn = buttons[i]
+                    chk.value = btn.get("enabled", True)
+                    txt_label.value = btn.get("text", "")
+                    cmb.value = btn.get("action", "fixed_text")
+                    txt_param.text = btn.get("parameter", "")
+                else:
+                    chk.value = True
+                    txt_label.value = ""
+                    cmb.value = "fixed_text"
+                    txt_param.text = ""
+            except Exception as e:
+                self.log_view.write_line(f">>> Erro interno ao carregar layout do botão {i}: {e}")
+
+    def save_menu_settings(self) -> None:
+        """Salva a configuração do menu persistindo no config.json."""
+        menu_btns = []
+        for i in range(5):
+            try:
+                chk = self.query_one(f"#chk_enabled_{i}", Switch).value
+                txt_label = self.query_one(f"#txt_label_{i}", Input).value
+                cmb = self.query_one(f"#cmb_action_{i}", Select).value
+                txt_param = self.query_one(f"#txt_param_{i}", TextArea).text
+                
+                menu_btns.append({
+                    "id": f"btn{i+1}",
+                    "enabled": chk,
+                    "text": txt_label,
+                    "action": cmb or "fixed_text",
+                    "parameter": txt_param
+                })
+            except Exception as e:
+                self.log_view.write_line(f">>> Erro interno (leitura) botão {i}: {e}")
+            
+        self.config_manager.update_batch({"menu_buttons": menu_btns})
+        try:
+            lbl = self.query_one("#lbl-save-status", Label)
+            lbl.update("[green]Configuração salva dinamicamente no sistema![/green]")
+            self.set_timer(3.0, lambda: lbl.update(""))
+        except: pass
+        self.log_view.write_line(">>> Configurações de menu salvas no arquivo config.json.")
 
     def start_bot(self) -> None:
         """Inicia a execução do bot Telegram assincronamente."""
