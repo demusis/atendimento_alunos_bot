@@ -78,6 +78,11 @@ class BotTerminalUI(App):
         color: white;
     }
 
+    Button.-warning {
+        background: #f57c00;
+        color: white;
+    }
+
     /* Garantir que botões bloqueados (running background) ainda mostrem o texto */
     Button:disabled {
         background: #333333;
@@ -130,6 +135,7 @@ class BotTerminalUI(App):
                         with Horizontal(id="controls-container"):
                             yield Button("▶️ Iniciar Bot", id="btn-start", variant="success")
                             yield Button("⏹️ Parar Bot", id="btn-stop", variant="error", disabled=True)
+                            yield Button("🔄 Reiniciar Serviço", id="btn-restart-svc", variant="warning", disabled=True)
                             
                         yield Static(
                             "🌐 IP Intranet: Oculto\n"
@@ -254,6 +260,7 @@ class BotTerminalUI(App):
             # Parar não funciona pelo TUI para kills externos a menos que usemos os.kill na thread principal. Melhor evitar para não quebrar a lógica do watchdog
             self.query_one("#btn-stop", Button).disabled = True
             self.query_one("#btn-stop", Button).tooltip = "O bot está sendo gerenciado pelo systemd / start_rp4.sh"
+            self.query_one("#btn-restart-svc", Button).disabled = False
             
         elif is_running_internally:
             self.query_one("#lbl-status", Label).update("Status: [green]RODANDO[/green]")
@@ -261,6 +268,7 @@ class BotTerminalUI(App):
             self.query_one("#btn-start", Button).disabled = True
             self.query_one("#btn-stop", Button).disabled = False
             self.query_one("#btn-stop", Button).tooltip = ""
+            self.query_one("#btn-restart-svc", Button).disabled = True
             
         else:
             self.query_one("#lbl-status", Label).update("Status: [red]PARADO[/red]")
@@ -268,6 +276,7 @@ class BotTerminalUI(App):
             self.query_one("#btn-start", Button).disabled = False
             self.query_one("#btn-stop", Button).disabled = True
             self.query_one("#btn-stop", Button).tooltip = ""
+            self.query_one("#btn-restart-svc", Button).disabled = True
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Trata cliques nos botões."""
@@ -277,6 +286,8 @@ class BotTerminalUI(App):
             self.start_bot()
         elif btn_id == "btn-stop":
             self.stop_bot()
+        elif btn_id == "btn-restart-svc":
+            self.restart_service()
 
     def start_bot(self) -> None:
         """Inicia a execução do bot Telegram assincronamente."""
@@ -312,8 +323,32 @@ class BotTerminalUI(App):
             asyncio.create_task(self.telegram_controller.stop())
             
         self.query_one("#lbl-status", Label).update("Status: [red]PARADO[/red]")
+        try:
+            self.query_one("#lbl-status-main", Label).update("Status: [red]PARADO[/red]")
+        except:
+            pass
         self.query_one("#btn-start", Button).disabled = False
         self.query_one("#btn-stop", Button).disabled = True
+
+    def restart_service(self) -> None:
+        """Reinicia o serviço systemd do bot em background no Raspberry Pi."""
+        self.log_view.write_line(">>> Enviando comando de restart para o systemd (telegram-bot.service)...")
+        try:
+            async def run_restart():
+                proc = await asyncio.create_subprocess_shell(
+                    'sudo systemctl restart telegram-bot.service',
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await proc.communicate()
+                if proc.returncode == 0:
+                    self.call_from_thread(self.log_view.write_line, ">>> Serviço reiniciado com sucesso via CLI! Acompanhe o log.")
+                else:
+                    self.call_from_thread(self.log_view.write_line, f">>> Falha ao reiniciar serviço: {stderr.decode('utf-8')}")
+            
+            asyncio.create_task(run_restart())
+        except Exception as e:
+             self.log_view.write_line(f">>> Erro interno ao chamar systemctl: {e}")
 
     def tail_logs(self):
         """Lê o arquivo de log do bot num loop independente (como 'tail -f') sem travar a interface."""
