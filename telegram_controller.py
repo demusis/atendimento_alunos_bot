@@ -1253,6 +1253,8 @@ class TelegramBotController:
 
     def _get_menu_keyboard(self) -> InlineKeyboardMarkup:
         """Return the standard menu keyboard built from config."""
+        # Força leitura do disco para refletir alterações feitas via TUI em tempo real
+        self.config_manager._load_config()
         buttons_config = self.config_manager.get("menu_buttons", [])
         
         keyboard = []
