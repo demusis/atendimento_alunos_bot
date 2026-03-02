@@ -89,6 +89,11 @@ def main():
     # Explicit TUI Mode
     if args.tui:
         try:
+            import logging
+            for h in logging.root.handlers[:]:
+                if isinstance(h, logging.StreamHandler) and getattr(h, 'stream', None) == sys.stdout:
+                    logging.root.removeHandler(h)
+                    
             from monitor_tui import BotTerminalUI
             app = BotTerminalUI()
             app.run()
@@ -127,6 +132,12 @@ def main():
             import textual
             print("Acionando MODO TUI (Terminal UI) automaticamente...")
             print("-" * 50)
+            
+            import logging
+            for h in logging.root.handlers[:]:
+                if isinstance(h, logging.StreamHandler) and getattr(h, 'stream', None) == sys.stdout:
+                    logging.root.removeHandler(h)
+                    
             from monitor_tui import BotTerminalUI
             app = BotTerminalUI()
             app.run()
