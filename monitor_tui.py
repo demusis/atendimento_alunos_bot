@@ -66,7 +66,8 @@ class BotTerminalUI(App):
     /* Estilização explícita de botões para evitar blocos cinzas sem texto */
     Button {
         margin: 1 1;
-        width: 20;
+        width: auto;
+        min-width: 16;
     }
 
     Button.-success {
