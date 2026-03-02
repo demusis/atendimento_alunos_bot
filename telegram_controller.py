@@ -1374,9 +1374,15 @@ class TelegramBotController:
             await target.reply_text(f"Erro ao processar FAQ: {e}")
 
     async def _send_start_menu(self, update: Update) -> None:
-        """Send the start menu with interactive buttons."""
+        """Send the start menu with interactive buttons, ensuring config is up-to-date."""
+        # Força o hot-reload imediatamente ANTES de puxar a mensagem e os botões
+        self.config_manager._load_config()
+        
         user_name = update.effective_user.first_name
-        welcome_msg = self.config_manager.get("welcome_message", f"Olá, {user_name}. Sou o assistente acadêmico.\nSelecione uma opção ou digite sua dúvida:")
+        
+        # Puxa o texto de boas-vindas. Caso haja a tag {nome} escrita no TUI, nós substituímos com o nome de verdade.
+        welcome_msg = self.config_manager.get("welcome_message", f"Olá, {user_name}. Selecione uma opção:")
+        welcome_msg = welcome_msg.replace("{nome}", user_name).replace("{user_name}", user_name)
         
         await update.message.reply_text(
             welcome_msg,
