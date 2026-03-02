@@ -73,26 +73,30 @@ class BotTerminalUI(App):
     Button.-success {
         background: #2e7d32;
         color: white;
-        border: tall #2e7d32;
+        border: none;
+        border-bottom: tall #1b5e20;
     }
 
     Button.-error {
         background: #c62828;
         color: white;
-        border: tall #c62828;
+        border: none;
+        border-bottom: tall #8e0000;
     }
 
     Button.-warning {
         background: #f57c00;
         color: white;
-        border: tall #f57c00;
+        border: none;
+        border-bottom: tall #e65100;
     }
 
     /* Garantir que botões bloqueados (running background) ainda mostrem o texto */
     Button:disabled {
         background: #333333;
         color: #777777;
-        border: tall #333333;
+        border: none;
+        border-bottom: tall #111111;
     }
 
     #controls-container {
