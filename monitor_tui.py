@@ -234,11 +234,61 @@ class BotTerminalUI(App):
                         yield Button("🔄 Atualizar Lista de Arquivos (Em breve)", disabled=True)
                         
                 with TabPane("Configuração", id="tab-settings"):
-                    with Vertical(classes="panel"):
-                         yield Static(
-                            "🚧 As configurações principais devem ser alteradas \n"
-                            "diretamente no arquivo config.json ou via GUI PyQt6 por enquanto.\n"
-                        )
+                    with VerticalScroll(classes="panel"):
+                        yield Static("⚙️ Configurações Principais", classes="panel-title")
+                        yield Button("💾 Salvar Configurações Gerais", id="btn-save-settings", variant="success")
+                        yield Label("", id="lbl-save-settings-status", classes="status-label")
+                        
+                        yield Label("Provedor de IA:")
+                        yield Select([("Ollama", "ollama"), ("OpenRouter", "openrouter")], id="cfg_ai_provider")
+                        
+                        yield Label("Token do Telegram:")
+                        yield Input(id="cfg_telegram_token", password=True)
+                        
+                        yield Label("Admin ID (separado por vírgula):")
+                        yield Input(id="cfg_admin_id")
+                        
+                        yield Label("Nível de Logs:")
+                        yield Select([("Baixo", "baixo"), ("Médio", "médio"), ("Alto", "alto")], id="cfg_log_verbosity")
+                        
+                        yield Label("URL do Ollama:")
+                        yield Input(id="cfg_ollama_url")
+                        
+                        yield Label("API Key OpenRouter (Opcional se usar Ollama):")
+                        yield Input(id="cfg_openrouter_key", password=True)
+                        
+                        yield Label("Modelo (IA):")
+                        yield Input(id="cfg_model_name")
+                        
+                        yield Label("Prompt do Sistema:")
+                        yield TextArea(id="cfg_sys_prompt")
+                        
+                        yield Label("Provedor de Embedding:")
+                        yield Select([("Ollama", "ollama"), ("OpenRouter", "openrouter")], id="cfg_embed_provider")
+                        
+                        yield Label("Modelo Embedding:")
+                        yield Input(id="cfg_embed_model")
+                        
+                        yield Label("Temperatura (Ex: 0.7):")
+                        yield Input(id="cfg_temperature")
+                        
+                        yield Label("Máx Tokens:")
+                        yield Input(id="cfg_max_tokens")
+                        
+                        yield Label("Memória de Busca RAG (K):")
+                        yield Input(id="cfg_rag_k")
+                        
+                        yield Label("Histórico de Conversa (0 para desativar):")
+                        yield Input(id="cfg_chat_history")
+                        
+                        yield Label("Limite de Mensagens (Msg/min):")
+                        yield Input(id="cfg_rate_limit")
+                        
+                        yield Label("Diretório ChromaDB (Vazio=Padrão):")
+                        yield Input(id="cfg_chroma_dir")
+                        
+                        yield Label("Mensagem de Boas-vindas:")
+                        yield TextArea(id="cfg_welcome_msg")
 
         yield Footer()
 
@@ -255,8 +305,9 @@ class BotTerminalUI(App):
         # Busca IPs em background
         asyncio.create_task(self.fetch_network_info())
         
-        # Carrega configurações na interface do menu
+        # Carrega configurações na interface do menu e configurações gerais
         self.load_menu_settings()
+        self.load_general_settings()
 
     async def fetch_network_info(self) -> None:
         """Obtém os IPs assincronamente e atualiza o painel principal."""
@@ -362,6 +413,108 @@ class BotTerminalUI(App):
             self.restart_service()
         elif btn_id == "btn-save-menu":
             self.save_menu_settings()
+        elif btn_id == "btn-save-settings":
+            self.save_general_settings()
+
+    def load_general_settings(self) -> None:
+        """Carrega os dados de configuração gerais do config.json para os widgets da Aba Configuração."""
+        d = self.config_manager.config_data
+        try:
+            prov = d.get("ai_provider", "ollama")
+            if prov not in ["ollama", "openrouter"]: prov = "ollama"
+            self.query_one("#cfg_ai_provider", Select).value = prov
+            
+            self.query_one("#cfg_telegram_token", Input).value = d.get("telegram_token", "")
+            self.query_one("#cfg_admin_id", Input).value = str(d.get("admin_id", ""))
+            
+            verb = d.get("log_verbosity", "médio")
+            if verb not in ["baixo", "médio", "alto"]: verb = "médio"
+            self.query_one("#cfg_log_verbosity", Select).value = verb
+            
+            self.query_one("#cfg_ollama_url", Input).value = d.get("ollama_url", "http://127.0.0.1:11434")
+            self.query_one("#cfg_openrouter_key", Input).value = d.get("openrouter_key", "")
+            
+            if prov == "ollama":
+                model = d.get("ollama_model", "llama3:latest")
+            else:
+                model = d.get("openrouter_model", "openai/gpt-3.5-turbo")
+            self.query_one("#cfg_model_name", Input).value = model
+            
+            self.query_one("#cfg_sys_prompt", TextArea).text = d.get("system_prompt", "")
+            
+            e_prov = d.get("embedding_provider", "ollama")
+            if e_prov not in ["ollama", "openrouter"]: e_prov = "ollama"
+            self.query_one("#cfg_embed_provider", Select).value = e_prov
+            
+            if e_prov == "openrouter":
+                e_model = d.get("openrouter_embedding_model", "openai/text-embedding-3-small")
+            else:
+                e_model = d.get("ollama_embedding_model", "qwen3-embedding:latest")
+            self.query_one("#cfg_embed_model", Input).value = e_model
+            
+            self.query_one("#cfg_temperature", Input).value = str(d.get("temperature", 0.7))
+            self.query_one("#cfg_max_tokens", Input).value = str(d.get("max_tokens", 2048))
+            self.query_one("#cfg_rag_k", Input).value = str(d.get("rag_k", 8))
+            self.query_one("#cfg_chat_history", Input).value = str(d.get("chat_history_size", 5))
+            self.query_one("#cfg_rate_limit", Input).value = str(d.get("rate_limit_per_minute", 10))
+            self.query_one("#cfg_chroma_dir", Input).value = d.get("chroma_dir", "")
+            self.query_one("#cfg_welcome_msg", TextArea).text = d.get("welcome_message", "")
+        except Exception as e:
+            self.log_view.write_line(f">>> Erro ao carregar configurações gerais na aba: {e}")
+
+    def save_general_settings(self) -> None:
+        """Salva a configuração da aba de Configuração pro config_manager."""
+        updates = {}
+        try:
+            prov = self.query_one("#cfg_ai_provider", Select).value or "ollama"
+            updates["ai_provider"] = prov
+            updates["telegram_token"] = self.query_one("#cfg_telegram_token", Input).value
+            updates["admin_id"] = self.query_one("#cfg_admin_id", Input).value
+            updates["log_verbosity"] = self.query_one("#cfg_log_verbosity", Select).value or "médio"
+            updates["ollama_url"] = self.query_one("#cfg_ollama_url", Input).value
+            updates["openrouter_key"] = self.query_one("#cfg_openrouter_key", Input).value
+            
+            model = self.query_one("#cfg_model_name", Input).value
+            if prov == "ollama":
+                updates["ollama_model"] = model
+            else:
+                updates["openrouter_model"] = model
+                
+            updates["system_prompt"] = self.query_one("#cfg_sys_prompt", TextArea).text
+            
+            e_prov = self.query_one("#cfg_embed_provider", Select).value or "ollama"
+            updates["embedding_provider"] = e_prov
+            e_model = self.query_one("#cfg_embed_model", Input).value
+            if e_prov == "openrouter":
+                updates["openrouter_embedding_model"] = e_model
+            else:
+                updates["ollama_embedding_model"] = e_model
+                
+            # Safely cast numeric fields
+            def float_val(val, default):
+                try: return float(val)
+                except: return default
+            def int_val(val, default):
+                try: return int(val)
+                except: return default
+
+            updates["temperature"] = float_val(self.query_one("#cfg_temperature", Input).value, 0.7)
+            updates["max_tokens"] = int_val(self.query_one("#cfg_max_tokens", Input).value, 2048)
+            updates["rag_k"] = int_val(self.query_one("#cfg_rag_k", Input).value, 8)
+            updates["chat_history_size"] = int_val(self.query_one("#cfg_chat_history", Input).value, 5)
+            updates["rate_limit_per_minute"] = int_val(self.query_one("#cfg_rate_limit", Input).value, 10)
+            
+            updates["chroma_dir"] = self.query_one("#cfg_chroma_dir", Input).value
+            updates["welcome_message"] = self.query_one("#cfg_welcome_msg", TextArea).text
+            
+            self.config_manager.update_batch(updates)
+            
+            lbl = self.query_one("#lbl-save-settings-status", Label)
+            lbl.update("[green]Configurações principais persistidas no sistema![/green]")
+            self.set_timer(3.0, lambda: lbl.update(""))
+            self.log_view.write_line(">>> Configurações gerais salvas no arquivo config.json.")
+        except Exception as e:
+            self.log_view.write_line(f">>> Erro ao salvar configurações gerais: {e}")
 
     def load_menu_settings(self) -> None:
         """Carrega os botões salvos na TUI."""
