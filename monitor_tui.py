@@ -65,7 +65,7 @@ class BotTerminalUI(App):
     
     /* Estilização explícita de botões para evitar blocos cinzas sem texto */
     Button {
-        margin: 1 1;
+        margin: 1 2;
         width: auto;
         min-width: 16;
     }
@@ -73,22 +73,26 @@ class BotTerminalUI(App):
     Button.-success {
         background: #2e7d32;
         color: white;
+        border: tall #2e7d32;
     }
 
     Button.-error {
         background: #c62828;
         color: white;
+        border: tall #c62828;
     }
 
     Button.-warning {
         background: #f57c00;
         color: white;
+        border: tall #f57c00;
     }
 
     /* Garantir que botões bloqueados (running background) ainda mostrem o texto */
     Button:disabled {
         background: #333333;
         color: #777777;
+        border: tall #333333;
     }
 
     #controls-container {
