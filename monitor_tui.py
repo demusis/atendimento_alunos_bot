@@ -230,7 +230,8 @@ class BotTerminalUI(App):
                         yield Static("📚 Gerenciamento da Base de Conhecimento (RAG)", classes="panel-title")
                         
                         with Horizontal(classes="menu-row"):
-                            yield Input(id="kb_filepath", placeholder="Caminho absoluto ou relativo do arquivo (PDF, TXT...)")
+                            curr_dir = os.path.abspath('.')
+                            yield Input(id="kb_filepath", placeholder=f"[{curr_dir}] Digite o nome do arquivo aqui...")
                             yield Button("➕ Ingerir Arquivo", id="btn-ingest", variant="success")
                         
                         with Horizontal(classes="menu-row"):
