@@ -89,7 +89,6 @@ class BotTerminalUI(App):
     Button:disabled {
         background: #333333;
         color: #777777;
-        border: none;
     }
 
     #controls-container {
@@ -231,7 +230,7 @@ class BotTerminalUI(App):
                         
                         with Horizontal(classes="menu-row"):
                             curr_dir = os.path.abspath('.')
-                            yield Input(id="kb_filepath", placeholder=f"[{curr_dir}] Digite o nome do arquivo aqui...")
+                            yield Input(id="kb_filepath", placeholder=f"{curr_dir}/")
                             yield Button("➕ Ingerir Arquivo", id="btn-ingest", variant="success")
                         
                         with Horizontal(classes="menu-row"):
