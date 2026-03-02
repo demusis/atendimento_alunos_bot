@@ -1375,9 +1375,11 @@ class TelegramBotController:
 
     async def _send_start_menu(self, update: Update) -> None:
         """Send the start menu with interactive buttons."""
+        user_name = update.effective_user.first_name
+        welcome_msg = self.config_manager.get("welcome_message", f"Olá, {user_name}. Sou o assistente acadêmico.\nSelecione uma opção ou digite sua dúvida:")
+        
         await update.message.reply_text(
-            f"Olá, {update.effective_user.first_name}. Sou o assistente acadêmico.\n"
-            "Selecione uma opção ou digite sua dúvida:",
+            welcome_msg,
             reply_markup=self._get_menu_keyboard()
         )
 

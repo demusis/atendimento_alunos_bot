@@ -129,7 +129,7 @@ class ConfigurationManager:
         """
         try:
             with open(self._config_file, 'w', encoding='utf-8') as f:
-                json.dump(self._config_data, f, indent=4)
+                json.dump(self._config_data, f, indent=4, ensure_ascii=False)
         except IOError as e:
             print(f"Error saving config: {e}")
 
