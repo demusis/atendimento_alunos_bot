@@ -152,7 +152,7 @@ class BotTerminalUI(App):
     """
 
     BINDINGS = [
-        Binding("q", "quit", "Sair", show=True),
+        Binding("s", "quit", "Sair", show=True),
         Binding("ctrl+c", "quit", "Sair"),
     ]
 
