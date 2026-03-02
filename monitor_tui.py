@@ -62,10 +62,38 @@ class BotTerminalUI(App):
         color: #ffffff;
         width: 100%;
     }
-    /* Deixando a biblioteca Textual aplicar sua estilização Padrão Nativa para os Botões
-       para eliminar quaisquer falhas de quebra de layout de borda customizada. */
+    /* Estratégia Visual Flat: Sem bordas complexas que geram artefatos ou caracteres engolidos 
+       no momento da renderização, focando num design sólido de alta legibilidade. */
     Button {
         margin: 1 2;
+        border: none;
+        background: #333333; /* Cor base para botões padrão não coloridos */
+        color: #ffffff;
+    }
+
+    Button.-primary {
+        background: #1976d2;
+        color: white;
+    }
+
+    Button.-success {
+        background: #388e3c;
+        color: white;
+    }
+
+    Button.-error {
+        background: #d32f2f;
+        color: white;
+    }
+
+    Button.-warning {
+        background: #f57c00;
+        color: white;
+    }
+
+    Button:disabled {
+        background: #424242;
+        color: #9e9e9e;
     }
 
     #controls-container {
