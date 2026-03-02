@@ -4,7 +4,7 @@ import sys
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
-from textual.widgets import Header, Footer, Log, TabbedContent, TabPane, Button, Static, Label, Input, Select, Switch, TextArea
+from textual.widgets import Header, Footer, Log, TabbedContent, TabPane, Button, Static, Label, Input, Select, Switch, TextArea, DataTable
 from textual.binding import Binding
 
 from config_manager import ConfigurationManager
@@ -223,15 +223,22 @@ class BotTerminalUI(App):
                                 yield Label("Parâmetro (Texto/Arquivo/Prefixo):")
                                 yield TextArea(id=f"txt_param_{i}")
                 
-                # Aba 4: Outros (Placeholder para Settings, Conhecimento)
+                # Aba 4: Base de Conhecimento
                 with TabPane("Base de Conhecimento", id="tab-kb"):
-                    with Vertical(classes="panel"):
-                        yield Static(
-                            "🚧 Funcionalidades de Ingestão de Base de Conhecimento via TUI\n"
-                            "poderão ser injetadas aqui através de Inputs Textual ou Botões acionando \n"
-                            "o script 'ingest_worker.py' da mesma forma que a GUI."
-                        )
-                        yield Button("🔄 Atualizar Lista de Arquivos (Em breve)", disabled=True)
+                    with VerticalScroll(classes="panel"):
+                        yield Static("📚 Gerenciamento da Base de Conhecimento (RAG)", classes="panel-title")
+                        
+                        with Horizontal(classes="menu-row"):
+                            yield Input(id="kb_filepath", placeholder="Caminho absoluto ou relativo do arquivo (PDF, TXT...)")
+                            yield Button("➕ Ingerir Arquivo", id="btn-ingest", variant="success")
+                        
+                        with Horizontal(classes="menu-row"):
+                            yield Button("🔄 Atualizar Lista", id="btn-refresh-kb", variant="primary")
+                            yield Button("🗑️ Limpar Banco RAG", id="btn-clear-db", variant="error")
+                            yield Button("🚨 Zerar Histórico de Conversas", id="btn-clear-history", variant="warning")
+                            yield Button("❌ Excluir Selecionado", id="btn-delete-file", variant="error", disabled=True)
+                        
+                        yield DataTable(id="table-kb", zebra_stripes=True)
                         
                 with TabPane("Configuração", id="tab-settings"):
                     with VerticalScroll(classes="panel"):
@@ -305,9 +312,16 @@ class BotTerminalUI(App):
         # Busca IPs em background
         asyncio.create_task(self.fetch_network_info())
         
+        # Inicia e configura a tabela
+        table = self.query_one("#table-kb", DataTable)
+        table.add_columns("Arquivo Salvo na Base Vetorial")
+        
         # Carrega configurações na interface do menu e configurações gerais
         self.load_menu_settings()
         self.load_general_settings()
+        
+        # Atualiza a lista da Base
+        self.refresh_knowledge_list()
 
     async def fetch_network_info(self) -> None:
         """Obtém os IPs assincronamente e atualiza o painel principal."""
@@ -415,6 +429,164 @@ class BotTerminalUI(App):
             self.save_menu_settings()
         elif btn_id == "btn-save-settings":
             self.save_general_settings()
+        elif btn_id == "btn-refresh-kb":
+            self.refresh_knowledge_list()
+        elif btn_id == "btn-ingest":
+            self.ingest_file()
+        elif btn_id == "btn-clear-db":
+            self.clear_db()
+        elif btn_id == "btn-clear-history":
+            self.clear_history_action()
+        elif btn_id == "btn-delete-file":
+            self.delete_selected_file()
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.data_table.id == "table-kb":
+            self.query_one("#btn-delete-file", Button).disabled = False
+
+    def get_worker_base_data(self) -> dict:
+        """Coleta dados base comuns para enviar pro ingest_worker."""
+        provider = self.config_manager.get("embedding_provider", "ollama")
+        if provider == "openrouter":
+            model_name = self.config_manager.get("openrouter_embedding_model", "qwen/qwen3-embedding-8b")
+        else:
+            model_name = self.config_manager.get("ollama_embedding_model", "nomic-embed-text")
+            
+        return {
+            "chroma_dir": self.config_manager.get("chroma_dir", ""),
+            "model_name": model_name,
+            "embedding_provider": provider,
+            "api_key": self.config_manager.get("openrouter_key", ""),
+            "ollama_url": self.config_manager.get("ollama_url", "http://127.0.0.1:11434")
+        }
+
+    async def run_worker_task(self, worker_data: dict, success_msg: str) -> None:
+        """Executa um comando no ingest_worker de forma assíncrona."""
+        import json
+        worker_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingest_worker.py")
+        
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, worker_script,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            stdout, stderr = await proc.communicate(input=json.dumps(worker_data).encode('utf-8'))
+            
+            if proc.returncode != 0:
+                self.log_view.write_line(f">>> Erro no worker: {stderr.decode('utf-8')}")
+                return None
+                
+            last_line = stdout.decode('utf-8').strip().split('\n')[-1]
+            data = json.loads(last_line)
+            if not data.get("ok"):
+                self.log_view.write_line(f">>> Ocorreu um erro na ação: {data.get('error')}")
+                return None
+            
+            if success_msg: 
+                self.log_view.write_line(f">>> {success_msg}")
+            
+            self.refresh_knowledge_list()
+            return data.get("result")
+        except Exception as e:
+            self.log_view.write_line(f">>> Erro interno de execução: {e}")
+            return None
+
+    def ingest_file(self) -> None:
+        filepath = self.query_one("#kb_filepath", Input).value.strip()
+        if not filepath or not os.path.exists(filepath):
+            self.log_view.write_line(">>> Erro: Arquivo especificado não encontrado.")
+            return
+            
+        import shutil
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        arquivos_path = os.path.join(base_dir, "arquivos")
+        os.makedirs(arquivos_path, exist_ok=True)
+        filename = os.path.basename(filepath)
+        target_fname = os.path.join(arquivos_path, filename)
+        
+        if os.path.abspath(filepath) != os.path.abspath(target_fname):
+            try:
+                shutil.copy2(filepath, target_fname)
+            except Exception as e:
+                self.log_view.write_line(f">>> Erro ao copiar arquivo: {e}")
+                return
+                
+        self.log_view.write_line(f">>> Iniciando Ingestão de {filename}...")
+        
+        data = self.get_worker_base_data()
+        data["action"] = "ingest"
+        data["file_paths"] = [target_fname]
+        asyncio.create_task(self.run_worker_task(data, f"Ingestão do arquivo '{filename}' concluída com sucesso!"))
+        self.query_one("#kb_filepath", Input).value = ""
+
+    def clear_db(self) -> None:
+        self.log_view.write_line(">>> Limpando Banco RAG...")
+        data = self.get_worker_base_data()
+        data["action"] = "clear"
+        asyncio.create_task(self.run_worker_task(data, "Banco de Dados Vetorial completamente limpo."))
+
+    def delete_selected_file(self) -> None:
+        table = self.query_one("#table-kb", DataTable)
+        row_key = table.cursor_row
+        if row_key is None or row_key < 0 or row_key >= table.row_count:
+            return
+            
+        filename = table.get_row_at(row_key)[0]
+        self.log_view.write_line(f">>> Excluindo {filename} do banco RAG...")
+        data = self.get_worker_base_data()
+        data["action"] = "delete"
+        data["filename"] = filename
+        
+        self.query_one("#btn-delete-file", Button).disabled = True
+        asyncio.create_task(self.run_worker_task(data, f"Arquivo '{filename}' deletado da Base."))
+
+    def refresh_knowledge_list(self) -> None:
+        async def fetch_list():
+            data = self.get_worker_base_data()
+            data["action"] = "list"
+            import json
+            worker_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingest_worker.py")
+            
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    sys.executable, worker_script,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=os.path.dirname(os.path.abspath(__file__))
+                )
+                stdout, _ = await proc.communicate(input=json.dumps(data).encode('utf-8'))
+                if proc.returncode == 0:
+                    last_line = stdout.decode('utf-8').strip().split('\n')[-1]
+                    res = json.loads(last_line)
+                    if res.get("ok"):
+                        files = res.get("result", [])
+                        table = self.query_one("#table-kb", DataTable)
+                        table.clear()
+                        for f in files: table.add_row(f)
+                        self.query_one("#btn-delete-file", Button).disabled = True
+                        
+            except Exception as e:
+                self.log_view.write_line(f">>> Erro listando a base: {e}")
+        
+        asyncio.create_task(fetch_list())
+
+    def clear_history_action(self) -> None:
+        self.log_view.write_line(">>> Apagando Histórico de Logs Analítico...")
+        from analytics_manager import AnalyticsManager
+        import threading
+        
+        def run_clear():
+            mgr = AnalyticsManager()
+            if mgr.clear_history():
+                 self.call_from_thread(self.log_view.write_line, ">>> Histórico de conversas apagado com sucesso do SQLite!")
+            else:
+                 self.call_from_thread(self.log_view.write_line, ">>> Falha ao zerar histórico.")
+        
+        threading.Thread(target=run_clear, daemon=True).start()
 
     def load_general_settings(self) -> None:
         """Carrega os dados de configuração gerais do config.json para os widgets da Aba Configuração."""
